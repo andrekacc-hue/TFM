@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import PurePath
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
@@ -133,6 +133,8 @@ async def upload_document(
                 "area": area,
                 "storage_path": storage_path,
                 "status": "pending",
+                # Lo encola esta misma petición: el outbox poller no debe volver a publicarlo
+                "enqueued_at": datetime.now(UTC).isoformat(),
                 "uploaded_by": str(user.user_id) if user.user_id else None,
                 "metadata": {
                     "original_filename": filename,
@@ -164,7 +166,9 @@ async def reindex_document(document_id: UUID, container: ContainerDep, user: Use
     document = await _get_document(container, document_id)
     authorize_area(user, document["area"])
     await container.repository.update(
-        "documents", {"id": f"eq.{document_id}"}, {"status": "pending", "error_message": None}
+        "documents",
+        {"id": f"eq.{document_id}"},
+        {"status": "pending", "error_message": None, "enqueued_at": datetime.now(UTC).isoformat()},
     )
     message_id = await _enqueue(container, document_id, reason="reindex")
     return IngestAccepted(document_id=document_id, status="pending", storage_path=document["storage_path"], message_id=message_id)

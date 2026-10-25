@@ -49,6 +49,7 @@ def test_upload_registers_document_and_enqueues(client, repo, storage, queue):
     assert doc["storage_path"] == f"operaciones/{body['document_id']}/Procedimiento_batch.md"
     assert doc["metadata"]["sha256"] and doc["metadata"]["size_bytes"] == len(PROCEDURE_MD.encode())
     assert doc["uploaded_by"] == EDITOR["X-User-Id"]
+    assert doc["enqueued_at"]  # encolado por la API: el outbox no debe republicarlo
     assert f"documents/{doc['storage_path']}" in storage.objects
 
 
@@ -141,7 +142,7 @@ def test_queue_stats_and_health(client):
     assert stats["length"] == 1 and stats["worker"]["consumer"] == "api-test"
     assert client.get("/health").json()["status"] == "ok"
     ready = client.get("/ready").json()
-    assert ready["checks"] == {"supabase": "ok", "redis": "ok", "models": "ok", "worker": "disabled"}
+    assert ready["checks"] == {"supabase": "ok", "redis": "ok", "models": "ok", "worker": "disabled", "outbox": "disabled"}
 
 
 @pytest.mark.parametrize(

@@ -39,6 +39,13 @@ class IngestSettings(BaseServiceSettings):
     worker_claim_idle_ms: int = Field(300_000, ge=1000)
     stream_maxlen: int = Field(10_000, ge=100)
 
+    # --- Outbox (documentos registrados por las Edge Functions) ---
+    outbox_enabled: bool = True
+    outbox_interval_seconds: float = Field(15.0, ge=1.0, le=600.0)
+    outbox_batch_size: int = Field(10, ge=1, le=100)
+    # Un documento "pending" ya encolado se reencola si nadie lo procesó en este tiempo
+    outbox_stale_seconds: int = Field(300, ge=30)
+
     preload_models: bool = True
 
 

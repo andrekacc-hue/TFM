@@ -24,10 +24,36 @@ la evaluación académica.
 | 2 | Librería compartida + rag-service | ✅ |
 | 3 | ingest-service + worker Redis Streams | ✅ |
 | 4 | api-gateway + analytics-service | ✅ |
-| 5 | Edge Functions de Supabase | ⏳ |
+| 5 | Edge Functions de Supabase | ✅ |
 | 6 | Frontend React (Admin Portal) | ⏳ |
 | 7 | Bot de Microsoft Teams | ⏳ |
 | 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+
+---
+
+## Fase 5 — Edge Functions de Supabase
+
+| Función | Disparador | Qué hace |
+|---------|-----------|----------|
+| `on-document-upload` | Trigger SQL en `storage.objects` → `pg_net` | Registra en `tfm.documents` (estado `pending`) los archivos que un usuario sube directamente al bucket `documents` |
+| `reindex-document` | Portal (`supabase.functions.invoke`) con la sesión del usuario | Devuelve un documento a `pending` (editor de su área o admin) |
+
+**Patrón outbox.** Las funciones corren en la nube de Supabase y no alcanzan Redis ni el ingest-service.
+Por eso registran el documento con `enqueued_at = NULL`, y un *outbox poller* del ingest-service lo reclama
+cada 15 s con `tfm.claim_pending_documents()` (`FOR UPDATE SKIP LOCKED`) y lo publica en Redis. Así no hay
+acoplamiento de red, se escala con varias réplicas sin duplicados y los documentos atascados en `pending` se
+reencolan solos si Redis pierde mensajes. Guía completa: [`docs/edge-functions.md`](docs/edge-functions.md).
+
+```powershell
+npx supabase login                                              # una vez
+.\.venv\Scripts\python.exe scripts\configure_edge_functions.py  # Vault + secretos + despliegue
+cd supabase\functions; deno task test                           # 16 tests unitarios (Deno)
+```
+
+Verificado de extremo a extremo (`tests/integration/test_edge_functions.py`): un editor sube un Markdown
+directamente a Storage con su JWT, el trigger avisa a la función, el outbox lo encola, el worker lo indexa y el
+RAG lo cita a través del gateway. `reindex-document` rechaza a un viewer y a un editor de otra área, y Storage
+impide subir a un área ajena. La suite de integración completa queda en **16 tests**.
 
 ---
 

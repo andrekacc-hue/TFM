@@ -1,0 +1,16 @@
+# Configuración de la Supabase CLI para este proyecto (Edge Functions).
+# El proyecto cloud se indica al desplegar con --project-ref.
+
+project_id = "soporte-bancario-rag"
+
+# verify_jwt = false: con las claves de API nuevas (sb_publishable/sb_secret) la
+# verificación la hace cada función:
+#   - on-document-upload: secreto compartido x-webhook-secret (lo envía el trigger SQL)
+#   - reindex-document:   access token del usuario validado con auth.getUser()
+[functions.on-document-upload]
+verify_jwt = false
+import_map = "./functions/deno.json"
+
+[functions.reindex-document]
+verify_jwt = false
+import_map = "./functions/deno.json"

@@ -7,7 +7,7 @@ COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 LOCAL_PROFILES := --profile supabase-local --profile ollama-local
 
 .DEFAULT_GOAL := help
-.PHONY: help bootstrap up up-local down restart ps logs migrate seed test test-db test-integration openapi psql pull-model observability reset
+.PHONY: help bootstrap up up-local down restart ps logs migrate seed test test-db test-integration test-functions deploy-functions openapi psql pull-model observability reset
 
 PY := .venv/Scripts/python.exe
 SERVICES := shared rag-service ingest-service analytics-service api-gateway
@@ -21,6 +21,12 @@ test-integration: ## Tests extremo a extremo contra el stack levantado (crea y b
 
 openapi: ## Exporta las especificaciones OpenAPI a docs/api/
 	$(PY) scripts/export_openapi.py
+
+test-functions: ## Tests unitarios de las Edge Functions (Deno)
+	cd supabase/functions && deno task test && deno task check
+
+deploy-functions: ## Configura Vault y secretos y despliega las Edge Functions (requiere npx supabase login)
+	$(PY) scripts/configure_edge_functions.py
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'

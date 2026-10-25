@@ -55,9 +55,12 @@ def create_app(
             container.models_ready = True
         if settings.worker_enabled:
             tasks.append(asyncio.create_task(container.consumer.run(stop), name="ingest-worker"))
+        if settings.outbox_enabled and container.outbox is not None:
+            tasks.append(asyncio.create_task(container.outbox.run(stop), name="ingest-outbox"))
 
-        logger.info("service_started", worker=settings.worker_enabled, stream=settings.redis_stream_ingest,
-                    chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+        logger.info("service_started", worker=settings.worker_enabled, outbox=settings.outbox_enabled,
+                    stream=settings.redis_stream_ingest, chunk_size=settings.chunk_size,
+                    chunk_overlap=settings.chunk_overlap)
         try:
             yield
         finally:
@@ -89,15 +92,19 @@ def create_app(
         worker = "disabled"
         if settings.worker_enabled:
             worker = "ok" if container.consumer.is_alive() else "stalled"
+        outbox = "disabled"
+        if settings.outbox_enabled and container.outbox is not None:
+            outbox = "ok" if container.outbox.is_alive() else "stalled"
         checks = {
             "supabase": "ok" if supabase_ok else "error",
             "redis": "ok" if redis_ok else "error",
             "models": "ok" if container.models_ready else "loading",
             "worker": worker,
+            "outbox": outbox,
         }
         if not (supabase_ok and redis_ok):
             status = "error"
-        elif not container.models_ready or worker == "stalled":
+        elif not container.models_ready or "stalled" in (worker, outbox):
             status = "degraded"
         else:
             status = "ok"

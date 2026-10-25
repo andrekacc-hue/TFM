@@ -12,6 +12,7 @@ from app.core.chunker import RecursiveChunker
 from app.core.embedder import BatchEmbedder
 from app.core.pipeline import IngestionPipeline
 from app.core.queue import IngestQueue
+from app.workers.outbox_poller import OutboxPoller
 from app.workers.stream_consumer import StreamConsumer
 from shared.auth import SupabaseJWTVerifier, resolve_user_context, verify_internal_api_key
 from shared.embeddings import SentenceTransformerEmbedder
@@ -34,6 +35,7 @@ class Container:
     consumer: StreamConsumer
     jwt_verifier: SupabaseJWTVerifier | None = None
     models_ready: bool = field(default=False)
+    outbox: OutboxPoller | None = None
 
     async def aclose(self) -> None:
         await self.repository.aclose()
@@ -78,7 +80,14 @@ def build_container(settings: IngestSettings) -> Container:
         settings.supabase_url,
         settings.supabase_jwt_secret.get_secret_value() if settings.supabase_jwt_secret else None,
     )
-    return Container(settings, repository, storage, redis, queue, embedder, pipeline, consumer, verifier)
+    outbox = OutboxPoller(
+        repository,
+        queue,
+        interval_seconds=settings.outbox_interval_seconds,
+        batch_size=settings.outbox_batch_size,
+        stale_seconds=settings.outbox_stale_seconds,
+    )
+    return Container(settings, repository, storage, redis, queue, embedder, pipeline, consumer, verifier, outbox=outbox)
 
 
 # ----------------------------------------------------------------------

@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "@std/assert": "jsr:@std/assert@1"
+  },
+  "tasks": {
+    "test": "deno test --allow-env tests/",
+    "check": "deno check on-document-upload/index.ts reindex-document/index.ts"
+  },
+  "fmt": { "lineWidth": 110 },
+  "compilerOptions": { "strict": true }
+}
