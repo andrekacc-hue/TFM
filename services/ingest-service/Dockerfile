@@ -1,5 +1,7 @@
 # Contexto de build: ./services
 #   docker build -f services/ingest-service/Dockerfile services
+#
+# Capas: dependencias y modelo primero (lentos); código propio y shared al final.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,17 +16,17 @@ WORKDIR /srv
 
 RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-COPY shared /srv/shared
-RUN pip install "/srv/shared[ml]"
-
 COPY ingest-service/requirements.txt /srv/ingest-service/requirements.txt
 RUN pip install -r /srv/ingest-service/requirements.txt
 
 USER app
-
 ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
 
+USER root
+COPY shared /srv/shared
+RUN pip install --no-deps /srv/shared
+USER app
 COPY --chown=app ingest-service/app /srv/ingest-service/app
 WORKDIR /srv/ingest-service
 

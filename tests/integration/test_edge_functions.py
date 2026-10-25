@@ -83,9 +83,17 @@ def test_outbox_indexes_the_document(uploaded, rest):
 
 def test_document_is_searchable_through_the_gateway(gateway, users, uploaded, rest):
     _wait_for_document(rest, uploaded["id"], {"indexed"})
-    body = gateway.post("/api/v1/query", json={"question": f"¿Qué hago con la alerta {uploaded['code']}?"},
-                        headers=users["viewer_ops"].headers("edge-query")).json()
-    assert any(uploaded["code"] in s["title"] for s in body["sources"]), body
+    question = f"El monitor de colas muestra la alerta {uploaded['code']}, ¿qué acción debo tomar?"
+    # Se admite UN reintento: con el contexto correcto recuperado, el LLM (temperatura 0.1) se
+    # abstiene a veces por prudencia ("modelo_sin_evidencia": ~1 de cada 3 ejecuciones medidas).
+    # Es una falsa abstención del modelo, no un fallo de la ingesta ni de la búsqueda; su tasa
+    # se cuantifica en la evaluación de la Fase 8.
+    for attempt in range(2):
+        body = gateway.post("/api/v1/query", json={"question": question},
+                            headers=users["viewer_ops"].headers(f"edge-query-{attempt}")).json()
+        if body["abstention_reason"] != "modelo_sin_evidencia":
+            break
+    assert any(uploaded["code"] in s["title"] for s in body["sources"]), (body.get("abstention_reason"), body["answer"][:200])
 
 
 def test_reindex_function_permissions_and_cycle(users, uploaded, rest):

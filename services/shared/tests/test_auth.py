@@ -68,7 +68,7 @@ def test_es256_with_wrong_key_is_rejected():
 @pytest.mark.parametrize(
     ("overrides", "code"),
     [
-        ({"exp": int(time.time()) - 10}, "token_expired"),
+        ({"exp": int(time.time()) - 120}, "token_expired"),
         ({"aud": "otra"}, "invalid_token"),
         ({"iss": "https://otro.supabase.co/auth/v1"}, "invalid_token"),
     ],
@@ -78,6 +78,25 @@ def test_invalid_claims_are_rejected(overrides, code):
     with pytest.raises(AuthenticationError) as exc:
         SupabaseJWTVerifier(URL, SECRET, jwks_client=FakeJWKS(None)).verify(token)
     assert exc.value.code == code
+
+
+def test_clock_skew_tolerance_on_iat():
+    """Regresión: tokens recién emitidos por un servidor con el reloj algo adelantado."""
+    verifier = SupabaseJWTVerifier(URL, SECRET, jwks_client=FakeJWKS(None))
+    slightly_ahead = jwt.encode(_claims(iat=int(time.time()) + 2), SECRET, algorithm="HS256")
+    assert verifier.verify(slightly_ahead).email == "ana@banco.test"
+
+    far_future = jwt.encode(_claims(iat=int(time.time()) + 600), SECRET, algorithm="HS256")
+    with pytest.raises(AuthenticationError):
+        verifier.verify(far_future)
+
+
+def test_leeway_does_not_extend_expired_tokens_beyond_margin():
+    verifier = SupabaseJWTVerifier(URL, SECRET, jwks_client=FakeJWKS(None), leeway_seconds=30)
+    expired = jwt.encode(_claims(exp=int(time.time()) - 120), SECRET, algorithm="HS256")
+    with pytest.raises(AuthenticationError) as exc:
+        verifier.verify(expired)
+    assert exc.value.code == "token_expired"
 
 
 def test_hs256_without_configured_secret_is_rejected():

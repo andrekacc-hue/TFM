@@ -25,9 +25,67 @@ la evaluación académica.
 | 3 | ingest-service + worker Redis Streams | ✅ |
 | 4 | api-gateway + analytics-service | ✅ |
 | 5 | Edge Functions de Supabase | ✅ |
-| 6 | Frontend React (Admin Portal) | ⏳ |
+| 6 | Frontend React (Admin Portal) | ✅ |
 | 7 | Bot de Microsoft Teams | ⏳ |
 | 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+
+---
+
+## Fase 6 — Admin Portal (React)
+
+React 18 + Vite + TypeScript estricto, Tailwind + componentes estilo shadcn/ui (Radix), TanStack Query,
+React Router, Zustand, React Hook Form + Zod, Recharts y Supabase JS.
+
+| Página | Rol mínimo | Contenido |
+|--------|-----------|-----------|
+| **Dashboard** | editor | KPIs (consultas, latencia p95, abstención, satisfacción), consultas por día, latencia por etapa, documentos más citados, preguntas sin respuesta, estado de la base de conocimientos, exportación CSV (admin) |
+| **Consulta IA** | viewer | Chat con respuestas en Markdown; las citas `[Fuente: …]` son *chips* que llevan a la fuente; fuentes desplegables con sección, página y similitud; latencia, modelo y traza; 👍/👎 con comentario |
+| **Documentos** | viewer (subir: editor) | Estado de ingesta **en tiempo real** (Supabase Realtime), búsqueda y filtros, subida con *drag & drop*, reindexación (Edge Function) |
+| **Incidentes** | viewer (editar: editor) | CRUD con formulario validado (Zod); borrar solo admin |
+| **Evaluación** | editor | Indicadores de calidad, golden dataset (alta/baja: admin), latencia del pipeline |
+| **Configuración** | viewer | Cuenta, tema, estado del sistema; **gestión de roles y áreas** (admin) |
+
+**Cómo habla con el backend**
+
+| Operación | Vía | Por qué |
+|-----------|-----|---------|
+| Consultas, subidas, métricas, exportación | api-gateway | Validación, rate limit, trazas y roles en un solo punto |
+| Listado de documentos, incidentes, golden dataset, perfiles | Supabase directo (clave publishable + sesión) | RLS ya filtra por área y rol; Realtime para el estado en vivo |
+| Reindexación | Edge Function `reindex-document` | Demuestra la Fase 5 desde la interfaz |
+
+**Calidad:** modo oscuro con variables CSS (y respeta el del sistema), diseño *mobile first*, navegación por
+teclado con foco visible y enlace "saltar al contenido", ARIA (`role="log"` en el chat, regiones, alertas),
+*error boundaries* por página, `Suspense` con carga diferida de cada página, conversación en `sessionStorage`
+(no persiste al cerrar el navegador) y cabeceras de seguridad en nginx.
+
+```powershell
+cd frontend
+npm install
+npm run dev          # http://localhost:5173 (lee las VITE_* del .env de la raíz)
+npm test             # 37 tests (Vitest + Testing Library)
+npm run build        # tsc estricto + build de producción por chunks
+
+# Producción en Docker (nginx, http://localhost:3000)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build frontend
+
+# E2E con navegador real (crea y borra usuarios temporales)
+.\.venv\Scripts\python.exe -m pip install playwright; .\.venv\Scripts\python.exe -m playwright install chromium
+.\.venv\Scripts\python.exe -m pytest tests\e2e -v
+```
+
+### Hallazgos de la revisión visual y del E2E
+
+La revisión con capturas reales (escritorio, móvil, claro/oscuro) y los tests con navegador encontraron:
+
+1. **El dashboard no mostraba lo recién preguntado.** El rango de fechas se redondeaba hacia *abajo* al minuto para
+   estabilizar la caché, y como el rango es `[desde, hasta)` quedaban fuera las consultas del minuto en curso.
+   Ahora se redondea hacia arriba (con test de regresión).
+2. **4 de cada 10 logins fallaban con "Token inválido".** El reloj de Supabase va hasta ~0,3 s por delante del
+   contenedor, así que algunos JWT recién emitidos tenían `iat` "en el futuro" y PyJWT lanzaba
+   `ImmatureSignatureError`. Se añadió una tolerancia de reloj de 30 s (RFC 7519) en la verificación compartida.
+   Medido antes y después dentro del contenedor.
+3. Ajustes de diseño: gráfico con todos los días del periodo (relleno con ceros), tabla de documentos legible
+   junto al panel de subida, plurales y textos truncados.
 
 ---
 

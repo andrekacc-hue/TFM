@@ -1,5 +1,8 @@
 # Contexto de build: ./services  (para poder copiar la librería shared)
 #   docker build -f services/rag-service/Dockerfile services
+#
+# Orden de capas pensado para la caché: dependencias y modelos (lentos, ~1 GB) primero;
+# el código propio y el de shared al final, para que cambiarlos no fuerce otra descarga.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,21 +19,22 @@ WORKDIR /srv
 # PyTorch CPU (evita descargar ~2 GB de CUDA)
 RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-COPY shared /srv/shared
-RUN pip install "/srv/shared[ml]"
-
+# Dependencias de terceros (incluyen las de shared): cambian poco
 COPY rag-service/requirements.txt /srv/rag-service/requirements.txt
 RUN pip install -r /srv/rag-service/requirements.txt
 
+# Modelos descargados por el usuario de la aplicación (sin chown posterior)
 USER app
-
-# Pre-descarga de modelos en la imagen (arranque en frío más rápido)
 ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ARG RERANK_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
 RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; \
 SentenceTransformer('${EMBEDDING_MODEL}'); CrossEncoder('${RERANK_MODEL}')"
 
-# El código va al final: cambiarlo no invalida las capas de dependencias y modelos
+# Código propio: librería shared (sin dependencias, ya instaladas) y la aplicación
+USER root
+COPY shared /srv/shared
+RUN pip install --no-deps /srv/shared
+USER app
 COPY --chown=app rag-service/app /srv/rag-service/app
 WORKDIR /srv/rag-service
 

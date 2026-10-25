@@ -399,6 +399,27 @@ services:
     networks: [soporte-net]
 
   # ------------------------------------------------------------------
+  # frontend — Admin Portal React servido por nginx (http://localhost:3000)
+  # Las variables VITE_* son públicas y se fijan al construir la imagen.
+  # ------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_API_GATEWAY_URL: ${VITE_API_GATEWAY_URL:-http://localhost:8000}
+        VITE_APP_NAME: ${VITE_APP_NAME:-Soporte TI Produbanco}
+        VITE_AZURE_ENABLED: ${AZURE_ENABLED:-false}
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks: [soporte-net]
+
+  # ------------------------------------------------------------------
   # Jaeger (opcional) — trazas OpenTelemetry
   #   docker compose --profile observability up -d jaeger
   # ------------------------------------------------------------------

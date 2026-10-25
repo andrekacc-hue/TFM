@@ -46,6 +46,10 @@ class SupabaseJWTVerifier:
         jwt_secret: Secreto HS256 (opcional; solo proyectos legacy/self-hosted).
         audience: Audiencia esperada (``authenticated``).
         jwks_client: Cliente JWKS inyectable (tests).
+        leeway_seconds: Tolerancia de desfase de reloj para ``iat``/``nbf``/``exp``.
+            Medido en este proyecto: el reloj de Supabase va hasta ~0,3 s por delante del
+            contenedor, y sin margen 4 de cada 10 tokens recién emitidos se rechazaban por
+            "iat en el futuro" (ImmatureSignatureError) justo después del login.
     """
 
     def __init__(
@@ -55,10 +59,12 @@ class SupabaseJWTVerifier:
         *,
         audience: str = "authenticated",
         jwks_client: PyJWKClient | None = None,
+        leeway_seconds: int = 30,
     ) -> None:
         self.issuer = f"{supabase_url.rstrip('/')}/auth/v1"
         self.jwt_secret = jwt_secret
         self.audience = audience
+        self.leeway = leeway_seconds
         self._jwks = jwks_client or PyJWKClient(
             f"{self.issuer}/.well-known/jwks.json", cache_keys=True, lifespan=3600
         )
@@ -85,6 +91,7 @@ class SupabaseJWTVerifier:
                 algorithms=[alg],
                 audience=self.audience,
                 issuer=self.issuer,
+                leeway=self.leeway,
                 options={"require": ["exp", "sub"]},
             )
         except AuthenticationError:

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Base de conocimientos inteligente con IA para el soporte de TI Producción" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Soporte TI · Asistente</title>
+    <script>
+      // Aplica el tema antes de pintar para evitar el parpadeo claro→oscuro
+      try {
+        const stored = JSON.parse(localStorage.getItem("ui-store") || "{}").state?.theme ?? "system";
+        const dark = stored === "dark" || (stored === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+      } catch {}
+    </script>
+  </head>
+  <body class="min-h-screen bg-background font-sans text-foreground antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
