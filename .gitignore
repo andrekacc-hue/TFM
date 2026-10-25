@@ -8,6 +8,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-eval/
 venv/
 .pytest_cache/
 .coverage

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Evaluación RAGAs</title><style>
+:root{color-scheme:light;--bg:#fcfcfb;--card:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e6e5e0;
+--grid:#efeee9;--series:#2a78d6;--good:#0ca30c;--warning:#fab219;--serious:#ec835a;--critical:#d03b3b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#1a1a19;--card:#232322;
+--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e86;--line:#3a3a37;--grid:#2c2c2a;--series:#3987e5}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#1a1a19;--card:#232322;--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e86;
+--line:#3a3a37;--grid:#2c2c2a;--series:#3987e5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
+font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:36px 0 12px}
+.sub{color:var(--ink2);margin:0}.muted{color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:20px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tile .v{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+.tile .l{font-weight:600;font-size:13px}.tile .d{color:var(--muted);font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink2);font-weight:600}td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.good{background:var(--good)}.warning{background:var(--warning)}.serious{background:var(--serious)}
+.critical{background:var(--critical)}
+.delta-up{color:var(--good)}.delta-down{color:var(--critical)}
+details summary{cursor:pointer;color:var(--ink2)}
+.ans{white-space:pre-wrap;color:var(--ink2);font-size:12px;margin:6px 0 0}
+svg text{fill:var(--ink2);font-size:12px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12px;color:var(--ink2)}
+ul.notes{color:var(--ink2);padding-left:18px}
+@media print{body{background:#fff}.card,.tile{break-inside:avoid}details{display:block}}
+</style></head>
+<body><main>
+<h1>Evaluación del asistente de Soporte TI</h1>
+<p class="sub">2026-10-25 18:52 UTC · 30 preguntas ×
+3 · LLM <b>gemma4:31b</b> · juez <b>gemma4:31b-cloud</b>
+· 90 consultas en 748 s · baseline gemma4 (Fase 8)</p>
+<div class="tiles"><div class="tile"><span class="badge"><span class="dot warning"></span><span class="l">Faithfulness</span></span><div class="v">0.739</div><div class="d">Afirmaciones de la respuesta respaldadas por el contexto · objetivo ≥ 0.85 · n=24</div></div><div class="tile"><span class="badge"><span class="dot warning"></span><span class="l">Answer relevancy</span></span><div class="v">0.760</div><div class="d">La respuesta atiende a lo que se preguntó · objetivo ≥ 0.80 · n=24</div></div><div class="tile"><span class="badge"><span class="dot good"></span><span class="l">Context precision</span></span><div class="v">0.958</div><div class="d">Los fragmentos útiles aparecen primero · objetivo ≥ 0.75 · n=24</div></div><div class="tile"><span class="badge"><span class="dot good"></span><span class="l">Context recall</span></span><div class="v">0.954</div><div class="d">El contexto cubre la respuesta de referencia · objetivo ≥ 0.80 · n=24</div></div><div class="tile"><span class="l">Falsa abstención</span><div class="v">0.0 %</div><div class="d">LLM 0.0 % · recuperación 0.0 %</div></div><div class="tile"><span class="l">Abstención correcta</span><div class="v">100 %</div><div class="d">Preguntas fuera de alcance en las que no inventa</div></div><div class="tile"><span class="l">Recuperación</span><div class="v">100 %</div><div class="d">Hit rate@k · MRR 1.000</div></div><div class="tile"><span class="l">Latencia</span><div class="v">2.4 s</div><div class="d">p50 · p95 5.2 s</div></div></div>
+
+<h2>Métricas RAGAs</h2>
+<div class="card"><svg viewBox="0 0 740 190" width="100%" role="img" aria-label="Métricas RAGAs de 0 a 1 con su objetivo"><line x1="150" y1="0" x2="150" y2="168" stroke="var(--grid)"/><text x="150" y="184" text-anchor="middle">0</text><line x1="280.0" y1="0" x2="280.0" y2="168" stroke="var(--grid)"/><text x="280.0" y="184" text-anchor="middle">0.25</text><line x1="410.0" y1="0" x2="410.0" y2="168" stroke="var(--grid)"/><text x="410.0" y="184" text-anchor="middle">0.5</text><line x1="540.0" y1="0" x2="540.0" y2="168" stroke="var(--grid)"/><text x="540.0" y="184" text-anchor="middle">0.75</text><line x1="670" y1="0" x2="670" y2="168" stroke="var(--grid)"/><text x="670" y="184" text-anchor="middle">1</text><text x="140" y="23" text-anchor="end">Faithfulness</text><rect x="150" y="12" width="384.4" height="16" rx="4" fill="var(--series)"><title>Faithfulness: 0.739 (objetivo 0.85)</title></rect><text x="600.0" y="25" style="fill:var(--ink)">0.74</text><line x1="592.0" y1="8" x2="592.0" y2="32" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 2"><title>Objetivo 0.85</title></line><text x="140" y="63" text-anchor="end">Answer relevancy</text><rect x="150" y="52" width="395.1" height="16" rx="4" fill="var(--series)"><title>Answer relevancy: 0.760 (objetivo 0.80)</title></rect><text x="574.0" y="65" style="fill:var(--ink)">0.76</text><line x1="566.0" y1="48" x2="566.0" y2="72" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 2"><title>Objetivo 0.80</title></line><text x="140" y="103" text-anchor="end">Context precision</text><rect x="150" y="92" width="498.0" height="16" rx="4" fill="var(--series)"><title>Context precision: 0.958 (objetivo 0.75)</title></rect><text x="655.952" y="105" style="fill:var(--ink)">0.96</text><line x1="540.0" y1="88" x2="540.0" y2="112" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 2"><title>Objetivo 0.75</title></line><text x="140" y="143" text-anchor="end">Context recall</text><rect x="150" y="132" width="496.2" height="16" rx="4" fill="var(--series)"><title>Context recall: 0.954 (objetivo 0.80)</title></rect><text x="654.184" y="145" style="fill:var(--ink)">0.95</text><line x1="566.0" y1="128" x2="566.0" y2="152" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 2"><title>Objetivo 0.80</title></line></svg><p class="muted">Media 0–1. La línea discontinua marca el objetivo de calidad.
+Faithfulness y answer relevancy se calculan sobre las respuestas emitidas; context precision y recall, sobre todas
+las preguntas con respuesta en el corpus (miden la recuperación aunque el modelo se abstenga).</p></div>
+
+<h2>Resultado de cada consulta</h2>
+<div class="card"><svg viewBox="0 0 1000 22" width="100%" preserveAspectRatio="none" role="img" aria-label="Distribución de resultados"><rect x="1.0" y="0" width="798.0" height="22" rx="4" style="fill:var(--good)"><title>Respondida: 72 (80%)</title></rect><rect x="801.0" y="0" width="198.0" height="22" rx="4" style="fill:var(--good)"><title>Abstención correcta: 18 (20%)</title></rect></svg><div class="legend"><span class="badge"><span class="dot good"></span>Respondida: 72</span><span class="badge"><span class="dot good"></span>Abstención correcta: 18</span></div>
+<p class="muted">Preguntas con resultado distinto entre repeticiones: ninguna.</p></div>
+
+<h2>Comparativa con ejecuciones anteriores</h2>
+<div class="card"><p class="muted">Primera ejecución registrada: no hay ejecuciones anteriores con las que comparar.</p></div>
+
+<h2>Detalle por pregunta</h2>
+<div class="card"><table><thead><tr><th>Id</th><th>Pregunta</th><th>Intentos</th><th class="n">Rank doc.</th><th class="n">Faithfulness</th><th class="n">Answer relevancy</th><th class="n">Context precision</th><th class="n">Context recall</th></tr></thead><tbody><tr><td><b>GD-01</b></td><td>¿Qué hago si el batch de cierre diario se queda en estado RUNNING después de las 02:00?<details><summary>Respondida</summary><p class="ans">**Problema técnico:** El proceso batch de cierre diario del core bancario permanece en estado RUNNING fuera de su ventana horaria establecida (después de las 02:00).
+
+**Procedimientos aplicables:**
+
+1. **Relanzamiento del proceso:** Con la aprobación del DBA, se debe relanzar el job utilizando la opción &#x27;Restart from checkpoint&#x27; del planificador desde el último checkpoint confirmado. Es imperativo no relanzar el proceso desde el inicio para evitar la duplicidad de asientos contables ya procesados. [Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 4]
+2. **Validación y escalamiento:** 
+    * Validar que los totales de control coincidan con el reporte de cuadre.
+    * Si el job vuelve a fallar o han transcurrido más de 45 minutos desde el incidente, se debe escalar al nivel 2 (Soporte Aplicativo Core) y abrir un incidente de severidad crítica. [Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 5]
+
+**Incertidumbres o información faltante:**
+La documentación proporcionada no detalla los pasos previos al relanzamiento (Pasos 1 y 2) ni el método específico para obtener la aprobación del DBA.</p><p class="ans"><b>Referencia:</b> Seguir PROC-OPS-014: 1) diagnosticar bloqueos en las tablas de saldos y movimientos y, si hay una transacción de conciliación sin confirmar, registrar la sesión y notificar al DBA de turno (el operador no cancela sesiones); 2) revisar el log del job buscando CIE-201 o CIE-305; 3) con aprobación del DBA, relanzar desde el último checkpoint confirmado; 4) validar los totales de control con el reporte de cuadre.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">1.000</td><td class="n">0.514</td><td class="n">0.700</td><td class="n">0.400</td></tr><tr><td><b>GD-02</b></td><td>¿Qué significa el código CIE-305 en el log del batch de cierre?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Identificación del significado del código de error CIE-305 en los logs del proceso batch de cierre diario.
+
+2. **Procedimiento aplicable:**
+   - El código CIE-305 indica la existencia de un registro duplicado. Ante este error, se requiere realizar una depuración de datos por parte de Soporte Aplicativo antes de proceder a relanzar el proceso.
+
+3. **Fuente documental:** [Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 3]
+
+4. **Incertidumbres o información faltante:** No se dispone de la documentación sobre el procedimiento específico de depuración de datos que debe ejecutar Soporte Aplicativo.</p><p class="ans"><b>Referencia:</b> CIE-305 indica un registro duplicado; requiere que Soporte Aplicativo depure los datos antes de relanzar el job.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.400</td><td class="n">0.812</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-03</b></td><td>¿Por qué no se debe relanzar el batch de cierre desde el inicio?<details><summary>Respondida</summary><p class="ans">**Problema técnico:** Riesgo de duplicidad de datos al relanzar el proceso batch de cierre diario desde el inicio.
+
+**Procedimiento aplicable:**
+1. El relanzamiento del job debe realizarse únicamente desde el último checkpoint confirmado utilizando la opción &#x27;Restart from checkpoint&#x27; del planificador, previa aprobación del DBA.
+
+**Justificación:**
+No se debe relanzar desde el inicio porque esto duplicaría los asientos contables que ya han sido procesados.
+
+[Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 4]
+
+**Incertidumbres o información faltante:**
+No se dispone de información sobre el proceso de validación de los asientos duplicados en caso de que el error ya haya ocurrido, ni sobre los pasos previos a la aprobación del DBA.</p><p class="ans"><b>Referencia:</b> Porque relanzarlo desde el inicio duplicaría los asientos contables ya procesados; debe relanzarse desde el último checkpoint confirmado con la opción &#x27;Restart from checkpoint&#x27;.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.875</td><td class="n">0.715</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-04</b></td><td>¿Cuándo hay que escalar al nivel 2 un fallo del batch de cierre?<details><summary>Respondida</summary><p class="ans">**Problema técnico:** Fallo en el proceso batch de cierre diario del core bancario.
+
+**Procedimiento aplicable:**
+1. Se debe escalar al nivel 2 (Soporte Aplicativo Core) y abrir un incidente de severidad crítica en los siguientes casos:
+    * Si el job vuelve a fallar tras el proceso de reinicio.
+    * Si han transcurrido más de 45 minutos desde que ocurrió el incidente.
+
+[Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 5]
+
+**Incertidumbres o información faltante:**
+La documentación no especifica los pasos previos de validación detallados antes del escalamiento, más allá de la coincidencia de los totales de control con el reporte de cuadre.</p><p class="ans"><b>Referencia:</b> Si el job vuelve a fallar o han pasado más de 45 minutos desde el incidente, se escala al nivel 2 (Soporte Aplicativo Core) y se abre un incidente de severidad crítica.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.800</td><td class="n">0.513</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-05</b></td><td>Varios cajeros rechazan retiros con código 91, ¿qué significa y qué hago?<details><summary>Respondida</summary><p class="ans">**1. Problema técnico:**
+Rechazo masivo de retiros en varios cajeros automáticos con el código de respuesta 91.
+
+**2. Procedimientos aplicables:**
+De acuerdo con la sintomatología, el código 91 indica que el emisor o el switch no están disponibles. Al presentarse de forma masiva en varios cajeros, se identifica como un problema del enlace del switch transaccional ATM.
+
+Los pasos a seguir son:
+1. Gestionar la contingencia del enlace del switch transaccional ATM.
+2. Si el enlace de contingencia no restablece el servicio en un lapso de 15 minutos, se debe:
+    - Escalar el caso al proveedor del switch siguiendo la matriz de escalamiento.
+    - Notificar al Centro de Operaciones de Seguridad.
+    - Registrar el incidente con severidad alta.
+
+**3. Fuente documental:**
+[Fuente: MAN-RED-007 Contingencia del enlace del switch transaccional ATM, fragmento 2 y fragmento 4]
+
+**4. Incertidumbres o información faltante:**
+La documentación proporcionada no detalla los pasos técnicos específicos para ejecutar la activación del &quot;enlace de contingencia&quot;, solo indica el tiempo de espera antes del escalamiento.</p><p class="ans"><b>Referencia:</b> El código 91 masivo indica que el emisor o el switch transaccional no está disponible. Se verifica el enlace principal en el panel de red y, si está caído, se activa el enlace de respaldo desde la consola de comunicaciones con la lista CL-RED-03, confirmando con transacciones de prueba.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.600</td><td class="n">0.600</td><td class="n">1.000</td><td class="n">0.500</td></tr><tr><td><b>GD-06</b></td><td>Si el código 91 aparece en un solo cajero, ¿cómo se gestiona?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Aparición del código de respuesta 91 (emisor o switch no disponible) en un único cajero automático.
+
+2. **Procedimiento aplicable:**
+   - El problema se identifica como un fallo local del equipo y debe gestionarse directamente con el proveedor de mantenimiento de ATM.
+
+3. **Fuente documental:** [Fuente: MAN-RED-007 Contingencia del enlace del switch transaccional ATM, fragmento 2]
+
+4. **Incertidumbres o información faltante:** No se especifica el canal de contacto ni el proceso de apertura de tickets con el proveedor de mantenimiento.</p><p class="ans"><b>Referencia:</b> Si el código 91 aparece en un solo cajero el problema es local del equipo y se gestiona con el proveedor de mantenimiento de ATM.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.857</td><td class="n">0.627</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-07</b></td><td>¿Qué lista de verificación se usa para activar el enlace de contingencia de los ATM?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Identificación de la lista de verificación necesaria para la activación del enlace de contingencia del switch transaccional ATM.
+
+2. **Procedimiento aplicable:**
+   - Para activar el enlace de respaldo desde la consola de comunicaciones, se debe seguir la lista de verificación **CL-RED-03**.
+
+3. **Fuente documental:** [Fuente: MAN-RED-007 Contingencia del enlace del switch transaccional ATM, fragmento 3]
+
+4. **Incertidumbres o información faltante:** No se dispone del contenido detallado de la lista de verificación CL-RED-03 en la documentación proporcionada.</p><p class="ans"><b>Referencia:</b> La lista de verificación CL-RED-03.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.500</td><td class="n">0.791</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-08</b></td><td>¿Qué pasa si el enlace de contingencia de cajeros no restablece el servicio?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Fallo en el restablecimiento del servicio tras la activación del enlace de contingencia de la red de cajeros automáticos (ATM).
+
+2. **Procedimiento aplicable:**
+   - Si el enlace de contingencia no restablece el servicio en un lapso de 15 minutos, se debe proceder con lo siguiente:
+     1. Escalar el caso al proveedor del switch, siguiendo la matriz de escalamiento correspondiente.
+     2. Notificar al Centro de Operaciones de Seguridad.
+     3. Registrar el incidente asignándole una severidad alta.
+
+3. **Fuente documental:** [Fuente: MAN-RED-007 Contingencia del enlace del switch transaccional ATM, fragmento 4]
+
+4. **Incertidumbres o información faltante:** No se proporciona la &quot;matriz de escalamiento&quot; mencionada ni los datos de contacto específicos del proveedor del switch o del Centro de Operaciones de Seguridad.</p><p class="ans"><b>Referencia:</b> Si no restablece el servicio en 15 minutos, se escala al proveedor del switch según la matriz de escalamiento, se notifica al Centro de Operaciones de Seguridad y se registra el incidente con severidad alta.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.750</td><td class="n">0.671</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-09</b></td><td>¿Qué indica un error HTTP 502 al iniciar sesión en la banca web?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Error HTTP 502 al intentar iniciar sesión en la banca web.
+
+2. **Procedimiento aplicable:**
+   - El error indica que el balanceador no obtuvo respuesta del servicio de autenticación, siendo la causa más habitual el agotamiento del pool de conexiones tras un despliegue.
+
+3. **Fuente documental:** [Fuente: FAQ-BEL-002 Errores de acceso a Banca en Línea, fragmento 1]
+
+4. **Incertidumbres:** No se reportan incertidumbres para esta consulta específica.</p><p class="ans"><b>Referencia:</b> Que el balanceador no obtuvo respuesta del servicio de autenticación; la causa más habitual es el agotamiento del pool de conexiones tras un despliegue.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.600</td><td class="n">0.863</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-10</b></td><td>Ante un 502 masivo en banca en línea, ¿cómo se reinician los nodos de autenticación?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Error HTTP 502 masivo en Banca en Línea, el cual indica que el balanceador no obtuvo respuesta del servicio de autenticación, generalmente debido al agotamiento del pool de conexiones [Fuente: FAQ-BEL-002, fragmento 1].
+
+2. **Procedimiento aplicable:**
+   - Confirmar en el monitoreo de aplicaciones el número de conexiones activas del servicio de autenticación.
+   - Si se confirma que el pool está agotado, solicitar a Soporte Aplicativo el reinicio ordenado de los nodos, realizándolo uno por uno para evitar la interrupción total del servicio [Fuente: FAQ-BEL-002, fragmento 2].
+
+3. **Incertidumbres o información faltante:** La documentación no especifica el comando técnico, la herramienta de gestión o la consola específica que debe utilizar Soporte Aplicativo para ejecutar el reinicio de los nodos.</p><p class="ans"><b>Referencia:</b> Tras confirmar en el monitoreo que el pool de conexiones está agotado, se solicita a Soporte Aplicativo el reinicio ordenado de los nodos uno por uno, para no cortar el servicio por completo.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">1.000</td><td class="n">0.694</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-11</b></td><td>Un cliente olvidó su contraseña de banca en línea, ¿puede TI Producción restablecerla?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Solicitud de restablecimiento de contraseña de Banca en Línea para un cliente.
+
+2. **Procedimientos aplicables:**
+   - El restablecimiento debe ser realizado por el propio cliente a través de la opción &#x27;Olvidé mi contraseña&#x27;.
+   - Alternativamente, el proceso puede ser ejecutado por el Contact Center previa validación de la identidad del cliente.
+
+3. **Fuente documental:** [Fuente: FAQ-BEL-002 Errores de acceso a Banca en Línea, fragmento 3]
+
+4. **Incertidumbres o información faltante:** No se requiere información adicional, ya que la documentación es explícita al señalar que TI Producción nunca solicita ni conoce contraseñas de clientes.</p><p class="ans"><b>Referencia:</b> No. El restablecimiento lo hace el propio cliente con &#x27;Olvidé mi contraseña&#x27; o el Contact Center tras validar su identidad; TI Producción nunca solicita ni conoce contraseñas de clientes.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.500</td><td class="n">0.798</td><td class="n">0.833</td><td class="n">1.000</td></tr><tr><td><b>GD-12</b></td><td>¿Qué hay que revisar en el monitoreo de aplicaciones cuando la banca web devuelve 502 a muchos usuarios?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Error HTTP 502 masivo al iniciar sesión en la banca web, lo cual indica que el balanceador no obtuvo respuesta del servicio de autenticación, usualmente debido al agotamiento del pool de conexiones tras un despliegue.
+
+2. **Procedimiento aplicable:**
+   - Confirmar en el monitoreo de aplicaciones el número de conexiones activas del servicio de autenticación.
+   - En caso de que el pool esté agotado, se debe solicitar a Soporte Aplicativo el reinicio ordenado de los nodos, realizándolo uno por uno para evitar la interrupción total del servicio.
+
+3. **Fuente documental:** [Fuente: FAQ-BEL-002 Errores de acceso a Banca en Línea, fragmento 1 y fragmento 2]
+
+4. **Incertidumbres o información faltante:** No se especifica la herramienta de monitoreo exacta a utilizar ni el tiempo estimado de recuperación tras el reinicio de los nodos.</p><p class="ans"><b>Referencia:</b> El número de conexiones activas del servicio de autenticación, para confirmar si el pool de conexiones está agotado.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.875</td><td class="n">0.576</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-13</b></td><td>¿Cuántos custodios se necesitan para renovar el certificado del HSM?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Identificación de los requisitos de personal (control dual) para el proceso de renovación de certificados del HSM.
+
+2. **Procedimiento aplicable:**
+   - Se requiere la presencia de dos custodios de claves para completar el procedimiento, asegurando que ninguna persona sola pueda ejecutarlo.
+
+3. **Fuente documental:** [Fuente: PROC-SEG-021 Renovación de certificados del HSM, fragmento 1 (pág. 1)]
+
+4. **Incertidumbre o información faltante:** No se reportan incertidumbres sobre este punto específico.</p><p class="ans"><b>Referencia:</b> Dos custodios de claves (control dual); ninguna persona sola puede completar el procedimiento.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.800</td><td class="n">0.836</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-14</b></td><td>¿Con cuánta anticipación debe aprobarse la ventana de mantenimiento para renovar el certificado del HSM?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Consulta sobre el tiempo de anticipación requerido para la aprobación de la ventana de mantenimiento en el proceso de renovación de certificados del HSM.
+
+2. **Procedimiento aplicable:**
+   - La ventana de mantenimiento debe ser aprobada por el Comité de Cambios con un mínimo de 72 horas de anticipación.
+
+3. **Fuente documental:** [Fuente: PROC-SEG-021 Renovación de certificados del HSM, fragmento 1 (pág. 1)]
+
+4. **Incertidumbres o información faltante:** No se reportan incertidumbres; la información solicitada se encuentra explícitamente en la documentación.</p><p class="ans"><b>Referencia:</b> La ventana debe estar aprobada por el Comité de Cambios con un mínimo de 72 horas de anticipación.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.800</td><td class="n">0.986</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-15</b></td><td>Después de importar el nuevo certificado del HSM, ¿qué servicio se reinicia?<details><summary>Respondida</summary><p class="ans">**Problema técnico:** Identificación del servicio a reiniciar tras la importación del nuevo certificado del HSM.
+
+**Procedimiento aplicable:**
+1. Reiniciar únicamente el servicio de canal seguro del switch (se especifica explícitamente que nunca se debe reiniciar el HSM completo).
+
+**Fuente documental:** [Fuente: PROC-SEG-021 Renovación de certificados del HSM, fragmento 2 (pág. 2)]
+
+**Incertidumbres o información faltante:** No se proporciona el nombre técnico específico del servicio de canal seguro ni el comando exacto para ejecutar el reinicio.</p><p class="ans"><b>Referencia:</b> Únicamente el servicio de canal seguro del switch; nunca se reinicia el HSM completo.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.667</td><td class="n">0.899</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-16</b></td><td>¿Qué hago si la transacción de prueba falla tras renovar el certificado TLS del HSM?<details><summary>Respondida</summary><p class="ans">**Problema técnico:**
+Falla en la transacción de prueba de bajo monto tras la renovación del certificado TLS del HSM, lo que indica un problema en la negociación de TLS 1.2 o superior entre el canal y el nuevo certificado.
+
+**Procedimiento aplicable:**
+1. Restaurar el certificado anterior (el cual debe permanecer en el HSM hasta su fecha de expiración).
+2. Escalar el caso al área de Seguridad de la Información.
+3. Registrar la evidencia de ambos custodios en el ticket de cambio.
+
+**Fuente documental:**
+[Fuente: PROC-SEG-021 Renovación de certificados del HSM, fragmento 3 (pág. 3)]
+
+**Incertidumbres o información faltante:**
+La documentación no especifica el método técnico exacto para realizar la restauración del certificado anterior ni los canales de comunicación específicos para el escalamiento a Seguridad de la Información.</p><p class="ans"><b>Referencia:</b> Restaurar el certificado anterior, que debe permanecer en el HSM hasta su expiración, y escalar a Seguridad de la Información, registrando la evidencia de ambos custodios en el ticket de cambio.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.778</td><td class="n">0.833</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-17</b></td><td>¿Cuándo se dispara la alerta BD-LOCK-01?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Identificación de la condición de disparo de la alerta de bloqueos en la base de datos del core.
+
+2. **Procedimiento aplicable:**
+   - La alerta BD-LOCK-01 se dispara automáticamente cuando el panel de monitoreo detecta sesiones en espera por más de 120 segundos sobre las tablas de cuentas o movimientos.
+
+3. **Fuente documental:** [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Sección: Detección]
+
+4. **Incertidumbres:** No se presenta información faltante para responder a esta consulta específica.</p><p class="ans"><b>Referencia:</b> Cuando el panel de monitoreo muestra sesiones en espera por más de 120 segundos sobre las tablas de cuentas o movimientos; la alerta abre un evento en la consola de operaciones.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.750</td><td class="n">0.709</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-18</b></td><td>¿Puede el operador de TI Producción terminar una sesión de base de datos que causa un bloqueo?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Consulta sobre los permisos del operador de TI Producción para finalizar sesiones de base de datos que generan bloqueos.
+
+2. **Procedimientos aplicables:**
+   - El operador puede identificar la sesión bloqueante, el usuario de aplicación y el programa que la originó para documentarlos en el evento [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Acciones permitidas al operador].
+   - En caso de detectar sesiones bloqueantes sobre tablas de saldos y movimientos (específicamente transacciones de conciliación sin confirmar), el operador debe registrar el identificador de sesión y notificar al DBA de turno [Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 2].
+   - Si el bloqueo afecta transacciones en línea o supera los 5 minutos, se debe escalar al DBA de turno por la línea de guardia [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Escalamiento al DBA].
+
+**Importante:** El operador de TI Producción **NO** debe terminar ni cancelar sesiones de base de datos por su cuenta [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Acciones permitidas al operador; PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 2]. Solo el DBA, contando con la aprobación del responsable de la aplicación, está autorizado para terminar la sesión bloqueante [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Escalamiento al DBA].
+
+3. **Fuente documental utilizada:**
+   - [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Acciones permitidas al operador]
+   - [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Escalamiento al DBA]
+   - [Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 2]
+
+4. **Incertidumbres o información faltante:** No se presenta información faltante para responder a esta consulta específica.</p><p class="ans"><b>Referencia:</b> No. El operador solo identifica y documenta la sesión bloqueante, el usuario y el programa; solo el DBA, con aprobación del responsable de la aplicación, puede terminar la sesión.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">1.000</td><td class="n">0.896</td><td class="n">0.917</td><td class="n">1.000</td></tr><tr><td><b>GD-19</b></td><td>¿Cuándo se escala un bloqueo de base de datos al DBA de turno?<details><summary>Respondida</summary><p class="ans">**Problema técnico:** Identificación de los criterios para el escalamiento de bloqueos de base de datos al DBA de turno.
+
+**Procedimientos aplicables:**
+
+1. **Por tiempo o impacto:** Se debe escalar al DBA de turno a través de la línea de guardia cuando el bloqueo supere los 5 minutos o cuando afecte a transacciones en línea [Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Escalamiento al DBA].
+2. **Durante el cierre diario:** En el proceso de reinicio del batch de cierre diario, si durante el diagnóstico de bloqueos en las tablas de saldos y movimientos se identifica una transacción de conciliación sin confirmar, se debe registrar el identificador de sesión y notificar al DBA de turno [Fuente: PROC-OPS-014 Reinicio del batch de cierre diario, fragmento 2].
+
+**Información faltante:**
+La documentación no especifica el proceso de notificación previo al escalamiento, más allá de la línea de guardia y la notificación en el caso del cierre diario.</p><p class="ans"><b>Referencia:</b> Si el bloqueo supera los 5 minutos o afecta a transacciones en línea, se escala al DBA de turno por la línea de guardia.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.429</td><td class="n">0.911</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-20</b></td><td>¿Cuál es el tiempo de respuesta del DBA de turno según la matriz de contacto?<details><summary>Respondida</summary><p class="ans">El tiempo de respuesta del DBA de turno es de 15 minutos a través de la línea de guardia.
+
+[Fuente: MAN-BD-003 Gestión de bloqueos en la base de datos del core, Matriz de contacto]</p><p class="ans"><b>Referencia:</b> 15 minutos, contactado por la línea de guardia.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.500</td><td class="n">0.877</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-21</b></td><td>La VPN de guardia me rechaza con el error VPN-403, ¿qué hago?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Rechazo de conexión a la VPN de guardia con el código de error VPN-403.
+
+2. **Procedimientos aplicables:**
+   1. Verificar en el calendario de guardias que el turno esté asignado a su nombre.
+   2. En caso de que la asignación sea correcta, solicitar al coordinador de guardia la actualización del rol (el cambio se aplica en un tiempo máximo de 10 minutos).
+
+3. **Fuente documental:** [Fuente: FAQ-VPN-001 Acceso remoto VPN para guardias de TI, ¿Qué hago si la VPN rechaza mi conexión con el error VPN-403?]
+
+4. **Incertidumbres o información faltante:** No se dispone de información sobre el contacto específico del coordinador de guardia ni el enlace al calendario de guardias.</p><p class="ans"><b>Referencia:</b> VPN-403 indica que el usuario no está en el rol de guardia activo. Verificar en el calendario de guardias que el turno esté asignado a su nombre y, si es así, pedir al coordinador de guardia que actualice el rol; el cambio se aplica en máximo 10 minutos.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.857</td><td class="n">0.854</td><td class="n">0.700</td><td class="n">1.000</td></tr><tr><td><b>GD-22</b></td><td>¿Qué perfil uso si aparece VPN-TIMEOUT?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Error de conexión VPN-TIMEOUT (el concentrador VPN no respondió).
+
+2. **Procedimiento aplicable:**
+   - Comprobar la conexión a internet.
+   - Reintentar la conexión utilizando el perfil secundario **vpn-guardia-2**.
+   - En caso de que ambos perfiles fallen, reportar el incidente a la Mesa de Servicio, detallando la hora y el perfil utilizado.
+
+3. **Fuente documental:** [Fuente: FAQ-VPN-001 Acceso remoto VPN para guardias de TI, ¿Y si el error es VPN-TIMEOUT?]
+
+4. **Incertidumbres o información faltante:** No se dispone de información sobre los pasos específicos para reportar el incidente a la Mesa de Servicio (canales de contacto).</p><p class="ans"><b>Referencia:</b> VPN-TIMEOUT indica que el concentrador VPN no respondió: comprobar la conexión a internet y reintentar con el perfil secundario vpn-guardia-2; si ambos fallan, reportar a la Mesa de Servicio con la hora y el perfil utilizado.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.571</td><td class="n">0.629</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-23</b></td><td>¿Puedo prestarle mi segundo factor de autenticación a otro guardia?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Consulta sobre la permisibilidad de compartir el segundo factor de autenticación (MFA) con otro miembro del equipo de guardia.
+
+2. **Procedimiento aplicable:**
+   - No está permitido compartir el segundo factor, ya que es personal e intransferible. El uso compartido de este elemento se considera una falta grave según la política de seguridad de la información.
+
+3. **Fuente documental:** [Fuente: FAQ-VPN-001 Acceso remoto VPN para guardias de TI, ¿Puedo compartir mi segundo factor (MFA) con otro guardia?]
+
+4. **Incertidumbres o información faltante:** No se identifican.</p><p class="ans"><b>Referencia:</b> No. El segundo factor (MFA) es personal e intransferible y compartirlo es una falta grave según la política de seguridad de la información.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">0.833</td><td class="n">0.784</td><td class="n">1.000</td><td class="n">1.000</td></tr><tr><td><b>GD-24</b></td><td>¿Quién puede usar la VPN de guardia y cuándo se revoca el acceso?<details><summary>Respondida</summary><p class="ans">1. **Problema técnico:** Consulta sobre los permisos de uso y el ciclo de vida del acceso a la VPN de guardia.
+
+2. **Procedimientos aplicables:**
+   - El acceso a la VPN de guardia está restringido exclusivamente al personal de TI Producción que esté incluido en el rol de guardia vigente.
+   - El acceso se habilita automáticamente al inicio del turno y se revoca al finalizar el mismo.
+
+3. **Fuente documental:** [Fuente: FAQ-VPN-001 Acceso remoto VPN para guardias de TI, ¿Quién puede usar la VPN de guardia?]
+
+4. **Incertidumbres o información faltante:** No se identifica información faltante para responder a esta consulta específica.</p><p class="ans"><b>Referencia:</b> Solo el personal de TI Producción incluido en el rol de guardia vigente; el acceso se habilita automáticamente al inicio del turno y se revoca al finalizarlo.</p></details></td><td><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span><span class="badge" title="Respondida"><span class="dot good"></span></span></td><td class="n">1</td><td class="n">1.000</td><td class="n">0.848</td><td class="n">0.833</td><td class="n">1.000</td></tr><tr><td><b>GD-25</b></td><td>¿Cuál es el menú del comedor corporativo esta semana?<details><summary>Abstención correcta</summary><p class="ans">No tengo evidencia suficiente en la documentación disponible.
+Recomiendo escalar este caso a un especialista del área.</p><p class="ans"><b>Referencia:</b> No hay información en la documentación: el asistente debe abstenerse.</p></details></td><td><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span></td><td class="n">—</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td></tr><tr><td><b>GD-26</b></td><td>¿Cómo se configura la replicación de Kafka entre centros de datos?<details><summary>Abstención correcta</summary><p class="ans">No tengo evidencia suficiente en la documentación disponible.
+Recomiendo escalar este caso a un especialista del área.</p><p class="ans"><b>Referencia:</b> No hay información en la documentación: el asistente debe abstenerse.</p></details></td><td><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span></td><td class="n">—</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td></tr><tr><td><b>GD-27</b></td><td>¿Cuál es la tasa de interés vigente de los créditos hipotecarios?<details><summary>Abstención correcta</summary><p class="ans">No tengo evidencia suficiente en la documentación disponible.
+Recomiendo escalar este caso a un especialista del área.</p><p class="ans"><b>Referencia:</b> No hay información en la documentación: el asistente debe abstenerse.</p></details></td><td><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span></td><td class="n">—</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td></tr><tr><td><b>GD-28</b></td><td>¿Qué longitud de clave usa el certificado de firma de las transferencias SPI?<details><summary>Abstención correcta</summary><p class="ans">No tengo evidencia suficiente en la documentación disponible.
+Recomiendo escalar este caso a un especialista del área.</p><p class="ans"><b>Referencia:</b> No hay información en la documentación (solo se documenta la clave RSA 3072 del certificado TLS del switch): el asistente debe abstenerse.</p></details></td><td><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span></td><td class="n">—</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td></tr><tr><td><b>GD-29</b></td><td>¿Cómo se restaura un backup de la base de datos del core bancario?<details><summary>Abstención correcta</summary><p class="ans">No tengo evidencia suficiente en la documentación disponible.
+Recomiendo escalar este caso a un especialista del área.</p><p class="ans"><b>Referencia:</b> No hay información en la documentación (MAN-BD-003 trata bloqueos, no copias de seguridad): el asistente debe abstenerse.</p></details></td><td><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span></td><td class="n">—</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td></tr><tr><td><b>GD-30</b></td><td>¿Cuántos días de vacaciones le corresponden a un operador de TI Producción?<details><summary>Abstención correcta</summary><p class="ans">No tengo evidencia suficiente en la documentación disponible.
+Recomiendo escalar este caso a un especialista del área.</p><p class="ans"><b>Referencia:</b> No hay información en la documentación: el asistente debe abstenerse.</p></details></td><td><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span><span class="badge" title="Abstención correcta"><span class="dot good"></span></span></td><td class="n">—</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td><td class="n">n/d</td></tr></tbody></table></div>
+
+<h2>Metodología</h2>
+<ul class="notes">
+<li>Golden dataset: <code>tests/golden_dataset.json</code> — 24
+preguntas con respuesta en el corpus y 6 fuera de alcance.</li>
+<li>Las consultas pasan por el api-gateway como llamada de sistema (sin RLS de área) con <code>include_contexts</code>, que
+devuelve los fragmentos completos entregados al LLM, también cuando se abstiene.</li>
+<li><b>Falsa abstención del LLM</b>: el modelo se abstuvo aunque el documento esperado estaba en su contexto.
+<b>Por recuperación</b>: el documento esperado no llegó al contexto (fallo del retriever/reranker).</li>
+<li>Juez RAGAs: gemma4:31b-cloud con temperatura 0; embeddings
+sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2. Usar el mismo modelo como generador y juez introduce un sesgo de autoevaluación;
+para resultados definitivos conviene un juez distinto (<code>--judge-model</code>, <code>--judge-base-url</code>).</li>
+</ul>
+</main></body></html>

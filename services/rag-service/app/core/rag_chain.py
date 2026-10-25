@@ -23,8 +23,17 @@ from app.core.prompts import ABSTENTION_MESSAGE, SECURITY_REFUSAL_MESSAGE
 from app.core.reranker import Reranker
 from app.core.retriever import RetrievedChunk, Retriever
 from shared.logging import get_logger, get_trace_id
-from shared.schemas import QueryRequest, QueryResponse, SourceCitation, Timings, Usage, UserContext
+from shared.schemas import (
+    QueryRequest,
+    QueryResponse,
+    RetrievedContext,
+    SourceCitation,
+    Timings,
+    Usage,
+    UserContext,
+)
 from shared.supabase_client import SupabaseRepository
+from shared.telemetry import span
 
 logger = get_logger(__name__)
 
@@ -96,7 +105,8 @@ class RagChain:
         warnings: list[str] = []
 
         # 1. Guardrails de entrada
-        guard = check_input(request.question)
+        with span("rag.guardrails"):
+            guard = check_input(request.question)
         timings.guardrails_ms = watch.lap()
         if guard.masked:
             warnings.append("datos_sensibles_enmascarados:" + ",".join(guard.masked))
@@ -108,13 +118,14 @@ class RagChain:
             )
 
         # 2. Recuperación (RLS si hay JWT de usuario; filtro de área explícito si no)
-        candidates = await self.retriever.retrieve(
-            guard.question,
-            top_k=self.params.top_k_retrieval,
-            threshold=self.params.similarity_threshold,
-            area=request.area,
-            user_jwt=user.access_token,
-        )
+        with span("rag.retrieval", **{"rag.top_k": self.params.top_k_retrieval}):
+            candidates = await self.retriever.retrieve(
+                guard.question,
+                top_k=self.params.top_k_retrieval,
+                threshold=self.params.similarity_threshold,
+                area=request.area,
+                user_jwt=user.access_token,
+            )
         timings.retrieval_ms = watch.lap()
         if not candidates:
             return await self._finish(
@@ -124,7 +135,8 @@ class RagChain:
 
         # 3. Reranking
         top_k = request.top_k or self.params.top_k_rerank
-        chunks = await self.reranker.rerank(guard.question, candidates, top_k)
+        with span("rag.rerank", **{"rag.candidates": len(candidates)}):
+            chunks = await self.reranker.rerank(guard.question, candidates, top_k)
         timings.rerank_ms = watch.lap()
         best = chunks[0].rerank_score if chunks else None
         if self.params.rerank_min_score is not None and (best is None or best < self.params.rerank_min_score):
@@ -134,14 +146,15 @@ class RagChain:
             )
 
         # 4. Generación
-        result = await self.generator.generate(guard.question, chunks)
+        with span("rag.generation", **{"rag.chunks": len(chunks)}):
+            result = await self.generator.generate(guard.question, chunks)
         timings.generation_ms = watch.lap()
 
         # 5. Guardrails de salida
         output = check_output(result.text)
         warnings.extend(output.warnings)
 
-        return await self._finish(
+        response = await self._finish(
             request, user, guard.question, timings, watch, warnings,
             answer=output.answer,
             abstention_reason="modelo_sin_evidencia" if output.abstained else None,
@@ -149,6 +162,13 @@ class RagChain:
             llm=(result.provider, result.model),
             usage=Usage(tokens_input=result.tokens_input, tokens_output=result.tokens_output),
         )
+        if request.include_contexts:
+            # Aunque el modelo se abstenga: así la evaluación distingue una abstención correcta
+            # (el contexto no tenía la respuesta) de una falsa abstención.
+            response.contexts = [
+                RetrievedContext(document_id=c.document_id, title=c.document_title, content=c.content) for c in chunks
+            ]
+        return response
 
     # ------------------------------------------------------------------
     async def _finish(

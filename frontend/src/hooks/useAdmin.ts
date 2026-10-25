@@ -33,7 +33,7 @@ export function useGoldenDataset() {
   return useQuery({
     queryKey: ["golden-dataset"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("golden_dataset").select("*").order("created_at");
+      const { data, error } = await supabase.from("golden_dataset").select("*").order("code", { nullsFirst: false }).order("created_at");
       if (error) throw new Error(error.message);
       return data as GoldenQuestion[];
     },

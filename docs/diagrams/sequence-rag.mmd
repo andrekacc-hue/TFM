@@ -1,0 +1,41 @@
+%% Secuencia de una consulta RAG (portal → respuesta con citas)
+sequenceDiagram
+  autonumber
+  actor U as Operador
+  participant P as Portal (React)
+  participant G as API Gateway
+  participant R as rag-service
+  participant DB as Supabase Postgres (pgvector + RLS)
+  participant L as LLM (Ollama)
+
+  U->>P: Escribe la pregunta
+  P->>G: POST /api/v1/query (Bearer JWT)
+  G->>G: Verifica JWT (JWKS ES256), lee rol/área de tfm.profiles
+  G->>G: Rate limit por usuario (Redis, ventana deslizante)
+  G->>R: POST /v1/query + X-Internal-Api-Key + JWT del usuario
+  R->>R: Guardrails de entrada (inyección, datos sensibles)
+  alt Pregunta bloqueada
+    R-->>G: Rechazo de seguridad (abstained, guardrail:*)
+  else Pregunta válida
+    R->>R: Embedding (MiniLM multilingüe, caché Redis)
+    R->>DB: rpc match_chunks(embedding, umbral 0.35, top 20) con el JWT
+    Note over DB: RLS: solo documentos del área del usuario + general
+    DB-->>R: Candidatos con similitud y metadatos
+    alt Sin candidatos sobre el umbral
+      R-->>G: Abstención (sin_contexto_relevante), sin llamar al LLM
+    else Hay contexto
+      R->>R: Reranking cross-encoder mMiniLM → top 5
+      R->>L: Prompt de sistema + fragmentos numerados [1]..[5]
+      L-->>R: Respuesta con [Fuente: documento, sección] o frase de abstención
+      R->>R: Guardrails de salida (enmascara datos sensibles, normaliza la abstención, avisa si no hay citas)
+      R->>DB: INSERT tfm.queries (latencias por etapa, fuentes, tokens)
+      R-->>G: answer + sources + timings + query_id
+    end
+  end
+  G-->>P: 200 QueryResponse (+ x-trace-id)
+  P-->>U: Respuesta con citas, extractos y 👍/👎
+  opt Feedback
+    U->>P: 👍 / 👎 + comentario
+    P->>G: POST /api/v1/feedback
+    G->>R: upsert tfm.feedback
+  end

@@ -287,6 +287,12 @@ components:
           - type: 'null'
           title: Top K
           description: Fuentes a usar tras el reranking
+        include_contexts:
+          type: boolean
+          title: Include Contexts
+          description: Devuelve el texto completo de los fragmentos entregados al LLM, también si se abstiene (evaluación
+            con RAGAs)
+          default: false
       type: object
       required:
       - question
@@ -342,11 +348,38 @@ components:
           - type: string
           - type: 'null'
           title: Trace Id
+        contexts:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/RetrievedContext'
+            type: array
+          - type: 'null'
+          title: Contexts
+          description: 'Solo con include_contexts: fragmentos completos entregados al LLM'
       type: object
       required:
       - answer
       title: QueryResponse
       description: Respuesta del asistente con fuentes verificables.
+    RetrievedContext:
+      properties:
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        title:
+          type: string
+          title: Title
+        content:
+          type: string
+          title: Content
+      type: object
+      required:
+      - document_id
+      - title
+      - content
+      title: RetrievedContext
+      description: Fragmento completo que recibió el LLM (evaluación).
     SourceCitation:
       properties:
         index:

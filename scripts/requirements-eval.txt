@@ -1,0 +1,8 @@
+# Entorno aislado de evaluación (.venv-eval): RAGAs 0.4 importa módulos de LangChain que
+# langchain-community 0.4 ya no incluye, incompatibles con el .venv de los microservicios.
+ragas==0.4.3
+langchain-community>=0.3.31,<0.4
+sentence-transformers>=3.0
+httpx>=0.27
+python-dotenv>=1.0
+playwright>=1.48   # informe PDF (usa los navegadores ya instalados por los tests E2E)

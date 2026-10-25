@@ -70,6 +70,9 @@ class BaseServiceSettings(BaseSettings):
     # --- Observabilidad ---
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "json"
+    # Trazas OpenTelemetry → Jaeger (perfil "observability"); requiere shared[otel]
+    enable_tracing: bool = False
+    jaeger_endpoint: str = "http://jaeger:4318/v1/traces"
 
     @field_validator("supabase_url")
     @classmethod

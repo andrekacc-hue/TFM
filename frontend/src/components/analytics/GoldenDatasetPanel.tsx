@@ -24,7 +24,7 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-/** Golden dataset: preguntas con respuesta esperada para la evaluación con RAGAs (Fase 8). */
+/** Golden dataset: preguntas con respuesta esperada para la evaluación con RAGAs. */
 export function GoldenDatasetPanel() {
   const { can } = useAuth();
   const { data, isLoading, error, refetch } = useGoldenDataset();
@@ -111,7 +111,7 @@ export function GoldenDatasetPanel() {
         ) : error ? (
           <ErrorState message="No se pudo cargar el golden dataset." onRetry={() => void refetch()} />
         ) : count === 0 ? (
-          <EmptyState icon={Target} title="Golden dataset vacío" description="Se completará con 30 preguntas en la Fase 8 (evaluación con RAGAs)." />
+          <EmptyState icon={Target} title="Golden dataset vacío" description="Cárgalo con scripts/run_evaluation.py (tests/golden_dataset.json)." />
         ) : (
           <ul className="divide-y rounded-lg border">
             {data?.map((q) => (
@@ -120,6 +120,8 @@ export function GoldenDatasetPanel() {
                   <p className="text-sm font-medium">{q.question}</p>
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{q.expected_answer}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1">
+                    {q.code && <Badge variant="outline">{q.code}</Badge>}
+                    {q.expected_behavior === "abstain" && <Badge variant="warning">Fuera de alcance</Badge>}
                     {q.difficulty && <Badge variant="secondary">{DIFFICULTY_LABEL[q.difficulty]}</Badge>}
                     {q.tags?.map((tag) => (
                       <Badge key={tag} variant="outline">

@@ -1,0 +1,56 @@
+%% C4 — Nivel 2: contenedores
+%% (notación C4 sobre flowchart: el layout C4Container de Mermaid apila los contenedores
+%%  en una columna y cruza las relaciones; el flowchart se lee mejor)
+flowchart LR
+  usuario(["👤 Usuario de TI<br/><small>Operador, editor o administrador</small>"])
+  teams["Microsoft Teams<br/>+ Azure Bot Service<br/><small>[Sistema externo]</small>"]
+  llm["LLM<br/><small>[Sistema externo]<br/>Ollama gemma4 · Claude · OpenAI</small>"]
+
+  subgraph app["Asistente de Soporte TI — Docker Compose"]
+    direction TB
+    portal["<b>Portal web</b><br/><small>[React 18 · Vite · nginx :3000]<br/>Consulta IA, documentos, incidentes,<br/>dashboard, evaluación</small>"]
+    bot["<b>Bot de Teams</b><br/><small>[M365 Agents SDK · :3978]<br/>Tarjetas adaptativas, comandos, 👍/👎</small>"]
+    gateway["<b>API Gateway</b><br/><small>[FastAPI · :8000]<br/>JWT ES256/JWKS, roles, rate limiting, proxy</small>"]
+    rag["<b>rag-service</b><br/><small>[FastAPI · :8001]<br/>Guardrails, recuperación, reranking,<br/>generación con citas</small>"]
+    ingest["<b>ingest-service</b><br/><small>[FastAPI + worker · :8002]<br/>PDF/DOCX/MD/HTML, chunking,<br/>embeddings, DLQ, outbox</small>"]
+    analytics["<b>analytics-service</b><br/><small>[FastAPI · :8003]<br/>Uso, latencia, feedback, exportación</small>"]
+    redis[("<b>Redis 7</b><br/><small>Stream de ingesta, caché de<br/>embeddings, rate limit</small>")]
+    jaeger["<b>Jaeger</b><br/><small>[OpenTelemetry · opcional]</small>"]
+  end
+
+  subgraph sb["Supabase"]
+    direction TB
+    auth["<b>Auth</b><br/><small>Email/contraseña · Azure AD</small>"]
+    storage["<b>Storage</b><br/><small>bucket documents</small>"]
+    edge["<b>Edge Functions</b><br/><small>[Deno] on-document-upload,<br/>reindex-document</small>"]
+    realtime["<b>Realtime</b><br/><small>Estado de indexación en vivo</small>"]
+    pg[("<b>Postgres + pgvector</b><br/><small>schema tfm · HNSW · RLS por rol y área</small>")]
+  end
+
+  usuario -->|HTTPS| portal
+  usuario -->|chat| teams
+  teams -->|Activities + JWT Bot Service| bot
+  portal -->|"API REST (Bearer JWT)"| gateway
+  portal -->|login| auth
+  portal -->|"sube archivos (RLS)"| storage
+  portal -.->|suscripción| realtime
+  bot -->|"X-Internal-Api-Key + X-User-Email"| gateway
+  gateway --> rag & ingest & analytics
+  gateway -.->|rate limit| redis
+  rag -->|"match_chunks() con JWT (RLS)"| pg
+  rag -->|prompt + contexto| llm
+  rag -.->|caché| redis
+  ingest <-->|XREADGROUP / DLQ| redis
+  ingest -->|chunks + embeddings| pg
+  ingest -->|descarga originales| storage
+  storage -->|trigger pg_net| edge
+  edge -->|"registra documento (outbox)"| pg
+  analytics -->|"RPC tfm.metrics_*"| pg
+  rag & gateway -.->|OTLP| jaeger
+
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef external fill:#999,stroke:#6b6b6b,color:#fff
+  classDef person fill:#08427b,stroke:#052e56,color:#fff
+  class portal,bot,gateway,rag,ingest,analytics,redis,jaeger,auth,storage,edge,realtime,pg container
+  class teams,llm external
+  class usuario person

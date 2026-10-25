@@ -6,6 +6,9 @@ import { stablePeriod } from "@/hooks/useMetrics";
 import { plural } from "@/lib/utils";
 import type { TimeseriesPoint } from "@/types/api";
 
+import type { EvaluationOutcome, EvaluationQuestionResult } from "@/types/domain";
+
+import { metricStatus, questionsToReview } from "./EvaluationPanel";
 import { bucketLabel, fillBuckets } from "./UsageChart";
 
 describe("stablePeriod", () => {
@@ -57,5 +60,33 @@ describe("plural", () => {
     expect(plural(3, "usuario")).toBe("3 usuarios");
     expect(plural(1, "valoración", "valoraciones")).toBe("1 valoración");
     expect(plural(0, "valoración", "valoraciones")).toBe("0 valoraciones");
+  });
+});
+
+describe("evaluación RAGAs", () => {
+  it("clasifica cada métrica frente a su objetivo", () => {
+    expect(metricStatus("faithfulness", 0.9)).toBe("ok");
+    expect(metricStatus("faithfulness", 0.75)).toBe("near");
+    expect(metricStatus("faithfulness", 0.5)).toBe("low");
+    expect(metricStatus("context_recall", null)).toBe("none");
+  });
+
+  it("solo marca para revisar las preguntas con algún resultado inesperado", () => {
+    const result = (id: string, ...outcomes: EvaluationOutcome[]): EvaluationQuestionResult => ({
+      id,
+      question: id,
+      expected_answer: "",
+      expected_behavior: "answer",
+      expected_document: null,
+      attempts: outcomes.map((outcome) => ({ outcome, answer: "", abstention_reason: null, contexts: [] })),
+      scores: {},
+    });
+    const review = questionsToReview([
+      result("GD-01", "respondida", "respondida"),
+      result("GD-02", "respondida", "falsa_abstencion_llm"),
+      result("GD-25", "abstencion_correcta"),
+      result("GD-26", "respuesta_indebida"),
+    ]);
+    expect(review.map((r) => r.id)).toEqual(["GD-02", "GD-26"]);
   });
 });

@@ -1,0 +1,27 @@
+%% C4 — Nivel 1: contexto del sistema
+C4Context
+  title Asistente de Soporte TI con IA — Diagrama de contexto
+
+  Person(operador, "Operador de TI Producción", "Consulta procedimientos durante incidentes y guardias")
+  Person(editor, "Editor de conocimiento", "Publica manuales, procedimientos, FAQ e incidentes de su área")
+  Person(admin, "Administrador", "Gestiona usuarios, roles y la evaluación de calidad")
+
+  System(asistente, "Asistente de Soporte TI", "RAG sobre la documentación operativa: responde con citas verificables o se abstiene si no hay evidencia")
+
+  System_Ext(teams, "Microsoft Teams", "Canal conversacional corporativo")
+  System_Ext(botservice, "Azure Bot Service", "Enruta y firma las actividades de Teams")
+  System_Ext(supabase, "Supabase", "Postgres + pgvector, Auth, Storage, Realtime, Edge Functions")
+  System_Ext(llm, "Proveedor LLM", "Ollama (local o Cloud) · Claude · OpenAI, intercambiables")
+  System_Ext(entra, "Microsoft Entra ID", "SSO corporativo (opcional)")
+
+  Rel(operador, asistente, "Pregunta y valora respuestas", "Portal web (HTTPS)")
+  Rel(operador, teams, "Chatea con el bot")
+  Rel(editor, asistente, "Sube documentos", "Portal web")
+  Rel(admin, asistente, "Administra y evalúa", "Portal web")
+  Rel(teams, botservice, "Mensajes")
+  Rel(botservice, asistente, "Activities", "HTTPS + JWT de Bot Service")
+  Rel(asistente, supabase, "Datos, vectores, archivos, sesiones", "HTTPS / PostgREST")
+  Rel(asistente, llm, "Generación de respuestas", "HTTP")
+  Rel(supabase, entra, "OAuth / OIDC", "Azure AD provider")
+
+  UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")

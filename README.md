@@ -7,11 +7,25 @@ indexada con **RAG** (Retrieval-Augmented Generation) que responde consultas en 
 un **portal React** y desde **Microsoft Teams**, con citas verificables de las fuentes y métricas para
 la evaluación académica.
 
+**Documentación:** [arquitectura](docs/architecture.md) · [despliegue](docs/deployment.md) ·
+[evaluación RAGAs](docs/evaluation.md) · [bot de Teams](docs/teams-bot.md) · [Edge Functions](docs/edge-functions.md) ·
+[API](docs/api/openapi.yaml) · diagramas [C4 contexto](docs/diagrams/c4-context.mmd),
+[C4 contenedores](docs/diagrams/c4-container.mmd) y [secuencia RAG](docs/diagrams/sequence-rag.mmd).
+
+### Inicio rápido (modo cloud)
+
+```powershell
+Copy-Item .env.example .env                                   # completar claves (docs/deployment.md)
+.\.venv\Scripts\python scripts\apply_migrations.py --seed --test
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+# Portal http://localhost:3000 · API http://localhost:8000/docs · Bot http://localhost:3978
+```
+
 ## Arquitectura (4 capas)
 
 | Capa | Componentes |
 |------|-------------|
-| 1. Frontend | Admin Portal (React + Vite + TS) · Teams Bot (Bot Framework, Python) |
+| 1. Frontend | Admin Portal (React + Vite + TS) · Teams Bot (Microsoft 365 Agents SDK, Python) |
 | 2. Middleware | `api-gateway` · `rag-service` · `ingest-service` · `analytics-service` (FastAPI) · Redis Streams/cache |
 | 3. Backend | Supabase: PostgreSQL 15 + pgvector · Storage · Auth (Azure AD) · RLS · Realtime · Edge Functions |
 | 4. IA | Ollama (`gemma4:31b-cloud`, plan gratuito) · embeddings multilingual-MiniLM (384d) · reranker cross-encoder multilingüe · adapters Claude/OpenAI |
@@ -27,7 +41,64 @@ la evaluación académica.
 | 5 | Edge Functions de Supabase | ✅ |
 | 6 | Frontend React (Admin Portal) | ✅ |
 | 7 | Bot de Microsoft Teams | ✅ (código y pruebas; registro en Azure según [guía](docs/teams-bot.md)) |
-| 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+| 8 | Evaluación RAGAs, observabilidad, carga, documentación | ✅ |
+
+---
+
+## Fase 8 — Evaluación, observabilidad y documentación
+
+### Evaluación con RAGAs
+
+- **Golden dataset** de 30 preguntas ([`tests/golden_dataset.json`](tests/golden_dataset.json)): 24 con respuesta
+  en los 6 documentos indexados y 6 fuera de alcance (2 trampa). Se sincroniza con `tfm.golden_dataset`.
+- **[`scripts/run_evaluation.py`](scripts/run_evaluation.py)**: consulta vía gateway, puntúa con RAGAs
+  (faithfulness, answer relevancy, context precision, context recall) y mide lo que RAGAs no cubre: falsa
+  abstención (separando el fallo del LLM del fallo de la recuperación), abstención correcta, hit rate y MRR, y
+  latencias. Genera un informe HTML/PDF con comparativa y guarda la ejecución en `tfm.evaluation_runs`.
+- **Portal → Evaluación**: última ejecución frente a los objetivos, evolución por ejecución y preguntas a revisar
+  (solo editores y admin, por RLS).
+- Nuevo campo `include_contexts` en `POST /query`: devuelve los fragmentos completos que recibió el LLM, también
+  cuando se abstiene. Sin él no se puede distinguir una abstención correcta de una falsa.
+
+```powershell
+py -3.12 -m venv .venv-eval; .\.venv-eval\Scripts\pip install -r scripts\requirements-eval.txt
+.\.venv-eval\Scripts\python scripts\run_evaluation.py --repeat 3 --pdf
+```
+
+**Línea base** (gemma4:31b-cloud, 30 preguntas × 3) — [informe PDF](docs/evaluation/baseline-gemma4.pdf):
+
+| Faithfulness | Answer relevancy | Context precision | Context recall | Falsa abstención | Abst. correcta | Hit rate · MRR | p50 · p95 |
+|---|---|---|---|---|---|---|---|
+| 0,739 | 0,760 | 0,958 | 0,954 | 0 / 72 | 18 / 18 | 100 % · 1,00 | 2,4 s · 5,2 s |
+
+La recuperación es casi perfecta. Faithfulness y relevancy bajan por la plantilla de cuatro secciones del prompt:
+la reformulación del problema y la sección de *incertidumbres* cuentan como afirmaciones no respaldadas por el
+contexto. No son alucinaciones; el análisis completo está en [`docs/evaluation.md`](docs/evaluation.md).
+
+La **falsa abstención** fue del 0 % en el golden dataset, pero depende de la formulación. En una sonda aparte, la
+pregunta "El monitor de colas muestra la alerta X, ¿qué acción debo tomar?" se abstuvo 3 de 4 veces, con el
+documento en la posición 1. Otras dos formas de preguntar lo mismo dieron 0 de 8. Es un sesgo de prudencia del
+LLM, no de la recuperación.
+
+### Observabilidad
+
+`ENABLE_TRACING=true` + `make observability` → trazas OpenTelemetry en Jaeger (http://localhost:16686): FastAPI y
+httpx instrumentados en los 4 servicios, propagación W3C entre gateway y rag-service, y spans `rag.guardrails`,
+`rag.retrieval`, `rag.rerank` y `rag.generation`. Sin la variable (por defecto), es un no-op.
+
+### Prueba de carga (Locust)
+
+```powershell
+.\.venv-eval\Scripts\pip install locust
+$env:LOAD_TEST_QUERY_WEIGHT='0'   # solo plataforma; 1 = incluye consultas al LLM
+.\.venv-eval\Scripts\locust -f scripts\load_test.py --host http://localhost:8000 --headless -u 50 -r 2 -t 90s --html reports\load\locust.html
+```
+
+Con 50 usuarios concurrentes (90 s, Docker Desktop en Windows): 969 peticiones, **0 errores**, p50 de 4 ms en
+`/health` y 160 ms en `/ready` (comprueba Supabase y los 3 servicios), p99 de 250 ms. Con una rampa brusca
+(10 usuarios/s) aparecieron 4 conexiones reseteadas (0,6 %) sin ningún error en el gateway, es decir, en la capa
+de red del host. Las consultas al LLM se limitan a 20/min por identidad: el throughput del asistente lo marca el
+proveedor del LLM, no la plataforma.
 
 ---
 
@@ -594,20 +665,29 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile observa
 
 ---
 
-## Estructura del repositorio (Fase 1)
+## Estructura del repositorio
 
 ```
 soporte-bancario-rag/
-├── .env.example
-├── docker-compose.yml          # Supabase + Redis + Ollama (+ Jaeger opcional)
-├── docker-compose.dev.yml      # expone DB/Redis/Ollama/Jaeger en 127.0.0.1
+├── .env.example                # todas las variables, comentadas
+├── docker-compose.yml          # perfiles: (cloud) · supabase-local · ollama-local · observability
+├── docker-compose.dev.yml      # expone servicios internos en 127.0.0.1
 ├── Makefile
-├── scripts/
-│   ├── bootstrap.sh            # Linux/macOS/Git Bash/WSL
-│   └── bootstrap.ps1           # Windows PowerShell
-└── supabase/
-    ├── docker/                 # config de Kong e init de la BD (self-hosted)
-    ├── migrations/             # 6 migraciones versionadas
-    ├── tests/database/         # tests pgTAP
-    └── seed.sql
+├── frontend/                   # portal React (Vite, TS, Tailwind, Vitest)
+├── teams-bot/                  # bot de Teams (Microsoft 365 Agents SDK) + manifiesto
+├── services/
+│   ├── shared/                 # config, logging, auth JWT, clientes Supabase/Redis, esquemas, telemetría
+│   ├── api-gateway/            # :8000 auth, roles, rate limiting, proxy
+│   ├── rag-service/            # :8001 guardrails, retrieval, reranking, generación
+│   ├── ingest-service/         # :8002 carga, chunking, embeddings, worker, outbox
+│   └── analytics-service/      # :8003 métricas y exportación
+├── supabase/
+│   ├── migrations/             # 11 migraciones versionadas
+│   ├── functions/              # Edge Functions (Deno)
+│   ├── tests/database/         # 64 tests pgTAP
+│   └── seed.sql
+├── scripts/                    # bootstrap, migraciones, corpus, evaluación RAGAs, carga, OpenAPI
+├── tests/                      # golden_dataset.json, integración y E2E
+├── samples/corpus/             # corpus ficticio (PDF, DOCX, MD)
+└── docs/                       # arquitectura, despliegue, evaluación, diagramas, API
 ```

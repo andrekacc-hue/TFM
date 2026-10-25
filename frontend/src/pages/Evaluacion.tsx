@@ -1,5 +1,6 @@
 import { BadgeCheck, Gauge, ShieldCheck } from "lucide-react";
 
+import { EvaluationPanel } from "@/components/analytics/EvaluationPanel";
 import { GoldenDatasetPanel } from "@/components/analytics/GoldenDatasetPanel";
 import { LatencyChart } from "@/components/analytics/LatencyChart";
 import { PageHeader } from "@/components/layout/AppLayout";
@@ -9,7 +10,7 @@ import { Skeleton } from "@/components/ui/feedback";
 import { useMetricsSummary } from "@/hooks/useMetrics";
 import { formatNumber, formatPercent, plural } from "@/lib/utils";
 
-/** Indicadores de calidad operativos (30 días). Las métricas RAGAs se añaden en la Fase 8. */
+/** Indicadores de calidad operativos (30 días), complementarios a las métricas RAGAs. */
 function QualityIndicators() {
   const { data, isLoading } = useMetricsSummary(30);
   if (isLoading || !data) return <Skeleton className="h-40" />;
@@ -53,8 +54,9 @@ function EvaluacionContent() {
   const summary = useMetricsSummary(30);
   return (
     <>
-      <PageHeader title="Evaluación" description="Calidad del asistente: indicadores operativos de los últimos 30 días y golden dataset" />
+      <PageHeader title="Evaluación" description="Calidad del asistente: métricas RAGAs, indicadores operativos de los últimos 30 días y golden dataset" />
       <div className="space-y-6">
+        <EvaluationPanel />
         <QualityIndicators />
         <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
           <GoldenDatasetPanel />

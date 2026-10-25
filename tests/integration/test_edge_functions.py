@@ -84,16 +84,16 @@ def test_outbox_indexes_the_document(uploaded, rest):
 def test_document_is_searchable_through_the_gateway(gateway, users, uploaded, rest):
     _wait_for_document(rest, uploaded["id"], {"indexed"})
     question = f"El monitor de colas muestra la alerta {uploaded['code']}, ¿qué acción debo tomar?"
-    # Se admite UN reintento: con el contexto correcto recuperado, el LLM (temperatura 0.1) se
-    # abstiene a veces por prudencia ("modelo_sin_evidencia": ~1 de cada 3 ejecuciones medidas).
-    # Es una falsa abstención del modelo, no un fallo de la ingesta ni de la búsqueda; su tasa
-    # se cuantifica en la evaluación de la Fase 8.
-    for attempt in range(2):
-        body = gateway.post("/api/v1/query", json={"question": question},
-                            headers=users["viewer_ops"].headers(f"edge-query-{attempt}")).json()
-        if body["abstention_reason"] != "modelo_sin_evidencia":
-            break
-    assert any(uploaded["code"] in s["title"] for s in body["sources"]), (body.get("abstention_reason"), body["answer"][:200])
+    # Se comprueba lo que prueba este test (ingesta → búsqueda con RLS) con los fragmentos que
+    # recibió el LLM, no con su respuesta: con esta formulación el modelo se abstiene a veces
+    # aunque el documento esté en primera posición (3 de 4 en la medición de la Fase 8,
+    # docs/evaluation.md). Esa falsa abstención es del LLM y se mide en la evaluación.
+    body = gateway.post("/api/v1/query", json={"question": question, "include_contexts": True},
+                        headers=users["viewer_ops"].headers("edge-query")).json()
+    titles = [c["title"] for c in body["contexts"] or []]
+    assert titles and uploaded["code"] in titles[0], (body.get("abstention_reason"), titles)
+    if not body["abstained"]:
+        assert any(uploaded["code"] in s["title"] for s in body["sources"])
 
 
 def test_reindex_function_permissions_and_cycle(users, uploaded, rest):

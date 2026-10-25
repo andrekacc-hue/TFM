@@ -20,6 +20,7 @@ from app.middleware.tracing import TRACE_HEADER, RequestContextMiddleware
 from app.routes import analytics, documents, health, query
 from shared.exceptions import register_exception_handlers
 from shared.logging import configure_logging, get_logger
+from shared.telemetry import setup_tracing
 
 logger = get_logger(__name__)
 
@@ -66,6 +67,7 @@ def create_app(
     app = FastAPI(title="Soporte TI Produbanco — API", version=__version__, description=DESCRIPTION, lifespan=lifespan)
     # Orden: el último añadido es el más externo. CORS debe envolver todo (también los errores).
     app.add_middleware(RequestContextMiddleware)
+    setup_tracing(app, settings.service_name, enabled=settings.enable_tracing, endpoint=settings.jaeger_endpoint)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

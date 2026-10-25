@@ -22,6 +22,7 @@ from shared.exceptions import register_exception_handlers
 from shared.logging import configure_logging, get_logger
 from shared.middleware import RequestContextMiddleware
 from shared.schemas import HealthResponse
+from shared.telemetry import setup_tracing
 
 logger = get_logger(__name__)
 
@@ -68,6 +69,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.add_middleware(RequestContextMiddleware)
+    setup_tracing(app, settings.service_name, enabled=settings.enable_tracing, endpoint=settings.jaeger_endpoint)
     register_exception_handlers(app)
     app.include_router(query.router)
 

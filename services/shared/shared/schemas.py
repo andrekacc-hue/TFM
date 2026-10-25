@@ -43,6 +43,11 @@ class QueryRequest(BaseModel):
         description="Filtra la búsqueda a un área (solo aplica a llamadas de sistema)",
     )
     top_k: int | None = Field(default=None, ge=1, le=10, description="Fuentes a usar tras el reranking")
+    include_contexts: bool = Field(
+        default=False,
+        description="Devuelve el texto completo de los fragmentos entregados al LLM, también si se abstiene "
+        "(evaluación con RAGAs)",
+    )
 
 
 class SourceCitation(BaseModel):
@@ -59,6 +64,14 @@ class SourceCitation(BaseModel):
     similarity: float
     rerank_score: float | None = None
     excerpt: str
+
+
+class RetrievedContext(BaseModel):
+    """Fragmento completo que recibió el LLM (evaluación)."""
+
+    document_id: UUID
+    title: str
+    content: str
 
 
 class Usage(BaseModel):
@@ -92,6 +105,9 @@ class QueryResponse(BaseModel):
     timings: Timings = Field(default_factory=Timings)
     warnings: list[str] = Field(default_factory=list)
     trace_id: str | None = None
+    contexts: list[RetrievedContext] | None = Field(
+        None, description="Solo con include_contexts: fragmentos completos entregados al LLM"
+    )
 
 
 class FeedbackRequest(BaseModel):

@@ -80,6 +80,16 @@ async def test_model_abstention_drops_sources():
     assert response.abstention_reason == "modelo_sin_evidencia"
     assert response.sources == []
     assert response.answer == ABSTENTION_MESSAGE
+    assert response.contexts is None
+
+
+async def test_include_contexts_returns_full_chunks_even_on_model_abstention():
+    chunk = make_chunk()
+    repo = FakeRepository([chunk_row(chunk)])
+    llm = FakeLLM(text="No tengo evidencia suficiente en la documentación disponible.")
+    response = await _chain(repo, llm).run(QueryRequest(question="¿Cómo configuro el HSM?", include_contexts=True))
+    assert response.abstention_reason == "modelo_sin_evidencia"
+    assert [(c.title, c.content) for c in response.contexts] == [(chunk.document_title, chunk.content)]
 
 
 async def test_rerank_min_score_triggers_abstention():
