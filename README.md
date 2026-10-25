@@ -22,12 +22,100 @@ la evaluación académica.
 |------|-----------|--------|
 | 1 | Infraestructura, Supabase, migraciones, bootstrap | ✅ |
 | 2 | Librería compartida + rag-service | ✅ |
-| 3 | ingest-service + worker Redis Streams | ⏳ |
+| 3 | ingest-service + worker Redis Streams | ✅ |
 | 4 | api-gateway + analytics-service | ⏳ |
 | 5 | Edge Functions de Supabase | ⏳ |
 | 6 | Frontend React (Admin Portal) | ⏳ |
 | 7 | Bot de Microsoft Teams | ⏳ |
 | 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+
+---
+
+## Fase 3 — Microservicio de ingesta
+
+### Flujo
+
+```
+POST /v1/ingest (multipart) ─► Supabase Storage  documents/{area}/{id}/{archivo}
+                            ─► tfm.documents  status=pending (sha256 para detectar duplicados)
+                            ─► XADD documents.ingest {document_id, attempt, trace_id}
+                                       │
+         worker (XREADGROUP, grupo ingest-workers)
+                                       ▼
+   processing ─► descarga ─► loader (PDF/DOCX/MD/TXT) ─► chunker ─► embeddings ─► tfm.chunks
+              └─► indexed (+ métricas en metadata.ingestion)   │  Realtime notifica al portal
+              └─► failed  (+ error_message) ──► reintento / DLQ documents.ingest.dlq
+```
+
+| Componente | Archivo | Responsabilidad |
+|------------|---------|-----------------|
+| Loaders | `app/core/loaders/` | PDF (por página), DOCX (por encabezado, con tablas), Markdown (por `#`), TXT |
+| Chunker | `app/core/chunker.py` | Recursivo párrafo → línea → frase → palabra, 700 caracteres con 120 de solapamiento |
+| Embedder | `app/core/embedder.py` | Lotes + cabecera contextual "título · sección" |
+| Pipeline | `app/core/pipeline.py` | Estados, reemplazo idempotente de chunks y métricas |
+| Cola | `app/core/queue.py` | Redis Streams: publicación, grupo de consumidores, DLQ y estadísticas |
+| Worker | `app/workers/stream_consumer.py` | Consumo, reintentos con `attempt`, reclamación de mensajes huérfanos y DLQ |
+
+### Decisiones técnicas
+
+- **`EMBEDDING_MAX_SEQ_LENGTH=256`.** El modelo MiniLM trunca a 128 tokens por defecto, y un chunk de 700
+  caracteres en español ocupa ~175 (medido: 4,0 caracteres/token). Sin este ajuste, el último ~27 % de cada chunk
+  no influía en la búsqueda. Se aplica igual en la ingesta y en la consulta.
+- **Chunks por sección.** Un chunk nunca mezcla dos páginas ni dos secciones, así la cita es exacta.
+  `tfm.match_chunks` devuelve ahora los metadatos (migración 07) y las citas muestran
+  `[Fuente: MAN-BD-003, Escalamiento al DBA]` o `fragmento 2 (pág. 2)` en lugar de solo "fragmento N".
+- **Cabeceras contextuales.** Se vectoriza "título · sección + contenido", pero se guarda y se muestra solo el
+  contenido. Un fragmento como "Paso 3: relanzar desde el checkpoint" queda asociado a su documento.
+- **Entrega *at-least-once* con idempotencia.** Redis Streams puede entregar un mensaje dos veces (worker caído
+  antes del ACK); el pipeline borra y reescribe los chunks, así el resultado es el mismo.
+- **Clasificación de errores.** Los errores de contenido (PDF escaneado, archivo corrupto, formato) quedan como
+  `failed` sin reintento; los transitorios (Storage o PostgREST caídos) se reencolan hasta `WORKER_MAX_ATTEMPTS`
+  y después van a la DLQ. Ningún documento queda en `processing` para siempre.
+- **Duplicados por SHA-256** del contenido dentro de la misma área (HTTP 409).
+- **Defensa en profundidad.** Además del gateway (Fase 4), el servicio exige la clave interna y solo deja subir
+  documentos a editores (en su área) y administradores.
+
+### Ejecutar en local (sin Docker)
+
+El worker necesita Redis 7 (Streams). Sin Docker, se puede usar temporalmente un Redis en memoria:
+
+```powershell
+# Terminal 1 — Redis temporal (solo desarrollo)
+.\.venv\Scripts\python.exe -c "from fakeredis import TcpFakeServer; TcpFakeServer(('127.0.0.1', 6379), server_type='redis').serve_forever()"
+
+# Terminal 2 — ingest-service (API + worker)
+cd services\ingest-service
+$env:REDIS_URL = 'redis://127.0.0.1:6379/0'
+..\..\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --port 8002
+
+# Terminal 3 — cargar el corpus de ejemplo (PDF, DOCX y Markdown)
+.\.venv\Scripts\python.exe scripts\make_sample_corpus.py     # genera samples\corpus
+.\.venv\Scripts\python.exe scripts\seed_corpus.py            # sube y espera la indexación
+```
+
+Con Docker: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis ingest-service`.
+
+### Endpoints (cabecera `X-Internal-Api-Key`)
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `POST /v1/ingest` | Multipart `file`, `source_type`, `area`, `title?` → 202 con `document_id` |
+| `POST /v1/ingest/{id}/reindex` | Reprocesar un documento (ingesta manual) |
+| `GET /v1/ingest/{id}` | Estado, nº de chunks, error y métricas de ingesta |
+| `GET /v1/ingest/queue/stats` | Longitud del stream, pendientes de ACK, DLQ y contadores del worker |
+| `GET /health` · `GET /ready` | Liveness · readiness (Supabase, Redis, modelo, worker) |
+
+### Tests
+
+```powershell
+cd services\ingest-service; ..\..\.venv\Scripts\python.exe -m pytest --cov=app   # 58 tests, 94 %
+```
+
+Usan PDF y DOCX reales generados en el propio test (reportlab, python-docx) y `fakeredis` para los Streams:
+reintentos, DLQ, reclamación de mensajes de un worker caído e idempotencia.
+
+Resultado de referencia (corpus de ejemplo): PDF de 3 páginas → 3 chunks en 2,2 s; DOCX → 5 chunks; Markdown →
+4 chunks. La pregunta sobre el certificado del HSM, que en la Fase 2 se abstenía, ahora se responde con citas por página.
 
 ---
 
@@ -78,8 +166,8 @@ py -3.12 -m venv .venv
 ### Tests
 
 ```powershell
-cd services\shared;      ..\..\.venv\Scripts\python.exe -m pytest --cov=shared   # 41 tests, 99 %
-cd ..\rag-service;       ..\..\.venv\Scripts\python.exe -m pytest --cov=app      # 75 tests, 96 %
+cd services\shared;      ..\..\.venv\Scripts\python.exe -m pytest --cov=shared   # 53 tests, 99 %
+cd ..\rag-service;       ..\..\.venv\Scripts\python.exe -m pytest --cov=app      # 76 tests, 96 %
 ```
 
 ### Prueba manual

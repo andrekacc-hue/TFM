@@ -1,6 +1,8 @@
 -- =====================================================================
 -- Tests de la Fase 1 (pgTAP): estructura, búsqueda vectorial y RLS.
 -- Todo corre en una transacción que se revierte: no deja datos.
+-- Las aserciones cuentan solo los fixtures (ids d0000000-...) para no depender
+-- de los datos reales que ya existan en la base.
 --
 --   scripts/bootstrap.sh --test-only     (o .\scripts\bootstrap.ps1 -TestOnly)
 -- =====================================================================
@@ -104,21 +106,21 @@ grant select on q to authenticated;
 -- 3. match_chunks
 -- ---------------------------------------------------------------------
 select is(
-  (select count(*)::int from tfm.match_chunks((select ones from q))),
+  (select count(*)::int from tfm.match_chunks((select ones from q)) where document_id::text like 'd0000000-%'),
   3,
   'match_chunks devuelve solo documentos con status indexed'
 );
 select is(
-  (select count(*)::int from tfm.match_chunks((select ones from q), 0.35, 20, 'creditos')),
+  (select count(*)::int from tfm.match_chunks((select ones from q), 0.35, 20, 'creditos') where document_id::text like 'd0000000-%'),
   1,
   'match_chunks aplica filter_area'
 );
 select ok(
-  (select min(similarity) from tfm.match_chunks((select ones from q))) > 0.99,
+  (select min(similarity) from tfm.match_chunks((select ones from q)) where document_id::text like 'd0000000-%') > 0.99,
   'similitud coseno ~1 para vectores idénticos'
 );
 select is(
-  (select count(*)::int from tfm.match_chunks((select orthogonal from q))),
+  (select count(*)::int from tfm.match_chunks((select orthogonal from q)) where document_id::text like 'd0000000-%'),
   0,
   'match_chunks aplica el umbral de similitud (abstención)'
 );
@@ -135,11 +137,11 @@ select set_config('request.jwt.claims',
   '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
 
-select is((select count(*)::int from tfm.documents), 3,
+select is((select count(*)::int from tfm.documents where id::text like 'd0000000-%'), 3,
   'viewer operaciones ve documentos de operaciones + general');
-select is((select count(*)::int from tfm.chunks), 3,
+select is((select count(*)::int from tfm.chunks where document_id::text like 'd0000000-%'), 3,
   'viewer operaciones ve chunks de sus documentos');
-select is((select count(*)::int from tfm.match_chunks((select ones from q))), 2,
+select is((select count(*)::int from tfm.match_chunks((select ones from q)) where document_id::text like 'd0000000-%'), 2,
   'RLS se aplica dentro de match_chunks');
 select ok((select count(*) from tfm.incidents) >= 0, 'viewer puede leer incidentes');
 
@@ -177,7 +179,7 @@ select set_config('request.jwt.claims',
   '{"sub":"00000000-0000-0000-0000-0000000000a2","role":"authenticated"}', true);
 set local role authenticated;
 
-select is((select count(*)::int from tfm.documents), 2,
+select is((select count(*)::int from tfm.documents where id::text like 'd0000000-%'), 2,
   'viewer créditos ve documentos de créditos + general');
 select is((select count(*)::int from tfm.queries), 0,
   'un usuario no ve consultas de otros');
@@ -215,7 +217,7 @@ select lives_ok(
   'editor registra incidentes');
 
 select is(
-  (select count(*)::int from tfm.documents where area = 'creditos'),
+  (select count(*)::int from tfm.documents where area = 'creditos' and id::text like 'd0000000-%'),
   0,
   'editor no ve documentos de otra área'
 );

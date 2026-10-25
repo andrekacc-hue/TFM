@@ -1,0 +1,20 @@
+[
+  {
+    "file": "PROC-SEG-021_renovacion_certificados_HSM.pdf",
+    "title": "PROC-SEG-021 Renovación de certificados del HSM",
+    "source_type": "procedimiento",
+    "area": "operaciones"
+  },
+  {
+    "file": "MAN-BD-003_gestion_bloqueos_bd.docx",
+    "title": "MAN-BD-003 Gestión de bloqueos en la base de datos del core",
+    "source_type": "manual",
+    "area": "operaciones"
+  },
+  {
+    "file": "FAQ-VPN-001_acceso_remoto_guardias.md",
+    "title": "FAQ-VPN-001 Acceso remoto VPN para guardias de TI",
+    "source_type": "faq",
+    "area": "general"
+  }
+]

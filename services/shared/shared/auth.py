@@ -111,6 +111,39 @@ class SupabaseJWTVerifier:
         )
 
 
+def resolve_user_context(
+    *,
+    authorization: str | None,
+    x_user_id: str | None,
+    x_user_area: str | None = None,
+    x_user_role: str | None = None,
+    verifier: SupabaseJWTVerifier | None,
+) -> UserContext:
+    """Determina el usuario de una petición interna.
+
+    * Con ``Authorization: Bearer <jwt>`` se verifica el token (defensa en profundidad,
+      aunque el gateway ya lo valida) y se usa para aplicar RLS en Supabase.
+    * Sin JWT se aceptan las cabeceras ``X-User-*`` que pone el gateway (canales como Teams,
+      donde el usuario se identifica por otra vía).
+
+    Raises:
+        AuthenticationError: Si el JWT o ``X-User-Id`` no son válidos.
+    """
+    token = bearer_token(authorization)
+    if token:
+        if verifier is None:
+            raise AuthenticationError("Verificación de JWT no configurada")
+        return verifier.verify(token)
+
+    user_id: UUID | None = None
+    if x_user_id:
+        try:
+            user_id = UUID(x_user_id)
+        except ValueError as exc:
+            raise AuthenticationError("X-User-Id inválido") from exc
+    return UserContext(user_id=user_id, area=x_user_area, role=x_user_role)
+
+
 def bearer_token(authorization: str | None) -> str | None:
     """Extrae el token de una cabecera ``Authorization: Bearer <token>``."""
     if not authorization:

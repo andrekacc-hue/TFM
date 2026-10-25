@@ -107,6 +107,27 @@ class RedisCache:
         await self._client.aclose()
 
 
+def create_stream_client(redis_url: str, *, block_ms: int = 5000) -> Any:
+    """Cliente Redis para Streams (mensajería, no cache).
+
+    A diferencia de la cache, aquí Redis SÍ es una dependencia crítica: el timeout de
+    lectura debe superar el ``BLOCK`` de ``XREADGROUP`` para no cortar la espera.
+
+    Args:
+        redis_url: URL de Redis.
+        block_ms: Milisegundos que ``XREADGROUP`` espera mensajes nuevos.
+    """
+    import redis.asyncio as redis
+
+    return redis.from_url(
+        redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2.0,
+        socket_timeout=block_ms / 1000 + 5,
+        health_check_interval=30,
+    )
+
+
 def create_cache(redis_url: str | None, default_ttl: int = 3600) -> Cache:
     """Crea la cache adecuada según la configuración.
 

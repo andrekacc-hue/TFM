@@ -50,11 +50,18 @@ class ContextChunk(Protocol):
     source_type: str
     chunk_index: int
     content: str
+    section: str | None
+    page: int | None
 
 
-def section_label(chunk_index: int) -> str:
-    """Etiqueta de sección legible (los índices de chunk empiezan en 0)."""
-    return f"fragmento {chunk_index + 1}"
+def section_label(chunk_index: int, section: str | None = None, page: int | None = None) -> str:
+    """Etiqueta de sección para las citas.
+
+    Usa el encabezado real de la sección si el ingest-service lo extrajo; si no, el número
+    de fragmento (los índices empiezan en 0). Añade la página en documentos PDF.
+    """
+    label = section.strip() if section and section.strip() else f"fragmento {chunk_index + 1}"
+    return f"{label} (pág. {page})" if page else label
 
 
 def build_context(chunks: Sequence[ContextChunk], max_chars: int = 12000) -> str:
@@ -75,7 +82,7 @@ def build_context(chunks: Sequence[ContextChunk], max_chars: int = 12000) -> str
     for number, chunk in enumerate(chunks, start=1):
         header = (
             f"[{number}] Documento: {chunk.document_title} | Tipo: {chunk.source_type} | "
-            f"Sección: {section_label(chunk.chunk_index)}"
+            f"Sección: {section_label(chunk.chunk_index, chunk.section, chunk.page)}"
         )
         body = chunk.content.strip()
         remaining = max_chars - used - len(header) - 2

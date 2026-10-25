@@ -62,6 +62,10 @@ class BaseServiceSettings(BaseSettings):
     # --- Embeddings ---
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_dim: int = 384
+    # MiniLM trunca a 128 tokens por defecto; un chunk de 700 caracteres en español ocupa ~175.
+    # El transformer admite 512 posiciones: 256 cubre el chunk completo. Debe ser igual en
+    # ingesta y consulta.
+    embedding_max_seq_length: int = Field(256, ge=64, le=512)
 
     # --- Observabilidad ---
     log_level: str = "INFO"

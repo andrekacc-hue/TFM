@@ -36,6 +36,7 @@ class SentenceTransformerEmbedder:
         dimension: Dimensión esperada (se valida al cargar).
         device: ``cpu``, ``cuda`` o ``None`` (autodetección).
         batch_size: Tamaño de lote para documentos.
+        max_seq_length: Tokens máximos por texto (el resto se trunca).
     """
 
     def __init__(
@@ -45,11 +46,13 @@ class SentenceTransformerEmbedder:
         *,
         device: str | None = None,
         batch_size: int = 32,
+        max_seq_length: int | None = 256,
     ) -> None:
         self.model_name = model_name
         self.dimension = dimension
         self.device = device
         self.batch_size = batch_size
+        self.max_seq_length = max_seq_length
         self._model: Any | None = None
 
     def load(self) -> None:
@@ -68,8 +71,16 @@ class SentenceTransformerEmbedder:
                 f"El modelo {self.model_name} produce {actual} dimensiones; "
                 f"EMBEDDING_DIM={self.dimension}. Deben coincidir con vector({self.dimension})."
             )
+        if self.max_seq_length:
+            model.max_seq_length = self.max_seq_length
         self._model = model
-        logger.info("embedding_model_loaded", model=self.model_name, dim=actual)
+        logger.info("embedding_model_loaded", model=self.model_name, dim=actual, max_seq_length=model.max_seq_length)
+
+    def count_tokens(self, text: str) -> int:
+        """Tokens que el modelo vería para ``text`` (sin truncar)."""
+        self.load()
+        assert self._model is not None
+        return len(self._model.tokenizer(text, add_special_tokens=True)["input_ids"])
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
         self.load()

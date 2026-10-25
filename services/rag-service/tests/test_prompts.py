@@ -37,3 +37,13 @@ def test_user_prompt_wraps_context_and_question():
 
 def test_section_label():
     assert section_label(0) == "fragmento 1"
+    assert section_label(3, "Paso 2 — Relanzamiento") == "Paso 2 — Relanzamiento"
+    assert section_label(3, "Escalamiento", 4) == "Escalamiento (pág. 4)"
+    assert section_label(0, "  ", 2) == "fragmento 1 (pág. 2)"
+
+
+def test_context_uses_ingested_section_metadata():
+    chunk = make_chunk(title="MAN-RED-007").model_copy(update={"metadata": {"section": "Síntomas", "page": 2}})
+    assert "Sección: Síntomas (pág. 2)" in build_context([chunk])
+    assert chunk.section == "Síntomas" and chunk.page == 2
+    assert make_chunk().model_copy(update={"metadata": {"page": "x"}}).page is None

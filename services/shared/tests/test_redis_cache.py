@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from shared.redis_client import NullCache, RedisCache, cache_key, create_cache
+from shared.redis_client import NullCache, RedisCache, cache_key, create_cache, create_stream_client
 
 
 class FakeRedis:
@@ -80,3 +80,10 @@ async def test_set_failure_trips_breaker():
 def test_create_cache_without_url_returns_null_cache():
     assert isinstance(create_cache(None), NullCache)
     assert isinstance(create_cache("redis://localhost:6399/0"), RedisCache)
+
+
+def test_stream_client_timeout_exceeds_block():
+    client = create_stream_client("redis://localhost:6399/0", block_ms=5000)
+    kwargs = client.connection_pool.connection_kwargs
+    assert kwargs["socket_timeout"] > 5
+    assert kwargs["decode_responses"] is True

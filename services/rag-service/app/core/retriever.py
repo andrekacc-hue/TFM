@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from shared.embeddings import Embedder
 from shared.logging import get_logger
@@ -24,7 +25,22 @@ class RetrievedChunk(BaseModel):
     document_title: str
     source_type: str
     chunk_index: int
+    metadata: dict[str, Any] = Field(default_factory=dict)
     rerank_score: float | None = None
+
+    @property
+    def section(self) -> str | None:
+        """Encabezado de la sección de origen (lo guarda el ingest-service)."""
+        value = self.metadata.get("section")
+        return str(value) if value else None
+
+    @property
+    def page(self) -> int | None:
+        """Página de origen (documentos PDF)."""
+        try:
+            return int(self.metadata["page"])
+        except (KeyError, TypeError, ValueError):
+            return None
 
 
 class Retriever:

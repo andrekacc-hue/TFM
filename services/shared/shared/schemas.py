@@ -54,6 +54,8 @@ class SourceCitation(BaseModel):
     title: str
     source_type: SourceType | str
     chunk_index: int
+    section: str | None = Field(None, description="Encabezado de la sección de origen")
+    page: int | None = Field(None, description="Página de origen (PDF)")
     similarity: float
     rerank_score: float | None = None
     excerpt: str

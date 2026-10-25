@@ -104,7 +104,10 @@ async def cmd_ask(container, question: str, area: str | None, top_k: int | None,
         print("FUENTES:")
         for s in response.sources:
             score = f"rerank={s.rerank_score:.3f}" if s.rerank_score is not None else ""
-            print(f"  [{s.index}] {s.title} · {s.source_type} · fragmento {s.chunk_index + 1} "
+            where = s.section or f"fragmento {s.chunk_index + 1}"
+            if s.page:
+                where += f", pág. {s.page}"
+            print(f"  [{s.index}] {s.title} · {s.source_type} · {where} "
                   f"(similitud={s.similarity:.3f} {score})")
             print(textwrap.indent(textwrap.fill(s.excerpt, width - 8), "      "))
     t = response.timings

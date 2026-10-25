@@ -17,10 +17,11 @@ Soporta las claves legacy (JWT ``eyJ...``) y las nuevas (``sb_secret_...`` /
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
-from shared.exceptions import AuthenticationError, AuthorizationError, UpstreamServiceError
+from shared.exceptions import AuthenticationError, AuthorizationError, NotFoundError, UpstreamServiceError
 from shared.logging import get_logger, get_trace_id
 
 logger = get_logger(__name__)
@@ -192,3 +193,86 @@ class SupabaseRepository:
         if response.status_code == 403 or body.get("code") == "42501":
             raise AuthorizationError("Operación no permitida por las políticas RLS", details=details)
         raise UpstreamServiceError("Error en Supabase", code="supabase_error", details=details)
+
+
+class SupabaseStorage:
+    """Cliente asíncrono de Supabase Storage (operaciones con service_role).
+
+    Args:
+        url: URL del proyecto Supabase.
+        service_key: Clave service_role (JWT legacy) o ``sb_secret_...``.
+        timeout: Timeout por petición (las subidas grandes necesitan margen).
+        transport: Transporte httpx inyectable (tests).
+    """
+
+    def __init__(
+        self,
+        url: str,
+        service_key: str,
+        *,
+        timeout: float = 60.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.base_url = f"{url.rstrip('/')}/storage/v1"
+        self._headers = {"apikey": service_key}
+        if _is_jwt(service_key):
+            self._headers["Authorization"] = f"Bearer {service_key}"
+        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+
+    @staticmethod
+    def _object_path(bucket: str, path: str) -> str:
+        return f"/object/{quote(bucket)}/{quote(path, safe='/')}"
+
+    async def upload(
+        self,
+        bucket: str,
+        path: str,
+        content: bytes,
+        *,
+        content_type: str = "application/octet-stream",
+        upsert: bool = False,
+    ) -> str:
+        """Sube un archivo y devuelve su ruta dentro del bucket.
+
+        Raises:
+            UpstreamServiceError: Si Storage rechaza la subida (p. ej. el objeto ya existe).
+        """
+        headers = {**self._headers, "Content-Type": content_type, "x-upsert": "true" if upsert else "false"}
+        await self._request("POST", self._object_path(bucket, path), content=content, headers=headers)
+        return path
+
+    async def download(self, bucket: str, path: str) -> bytes:
+        """Descarga el contenido de un objeto."""
+        response = await self._request("GET", self._object_path(bucket, path), headers=self._headers)
+        return response.content
+
+    async def remove(self, bucket: str, paths: list[str]) -> None:
+        """Elimina objetos del bucket (no falla si no existen)."""
+        await self._request(
+            "DELETE", f"/object/{quote(bucket)}", json={"prefixes": paths}, headers=self._headers
+        )
+
+    async def aclose(self) -> None:
+        """Cierra el pool de conexiones."""
+        await self._client.aclose()
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        try:
+            response = await self._client.request(method, f"{self.base_url}{path}", **kwargs)
+        except httpx.HTTPError as exc:
+            raise UpstreamServiceError(
+                "Supabase Storage no disponible", code="storage_unavailable", details={"error": str(exc)}
+            ) from exc
+        if response.is_success:
+            return response
+        try:
+            body = response.json()
+        except ValueError:
+            body = {"message": response.text[:300]}
+        details = {"status": response.status_code, "path": path, "storage": body}
+        logger.warning("storage_error", method=method, **details)
+        if response.status_code in (401, 403):
+            raise AuthorizationError("Storage rechazó las credenciales", details=details)
+        if response.status_code == 404 or str(body.get("statusCode")) == "404":
+            raise NotFoundError("Objeto no encontrado en Storage", details=details)
+        raise UpstreamServiceError("Error en Supabase Storage", code="storage_error", details=details)

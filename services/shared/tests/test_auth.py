@@ -8,7 +8,7 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from shared.auth import SupabaseJWTVerifier, bearer_token, verify_internal_api_key
+from shared.auth import SupabaseJWTVerifier, bearer_token, resolve_user_context, verify_internal_api_key
 from shared.exceptions import AuthenticationError
 
 URL = "https://demo.supabase.co"
@@ -96,6 +96,28 @@ def test_internal_api_key():
     for provided in (None, "", "otra"):
         with pytest.raises(AuthenticationError):
             verify_internal_api_key(provided, "clave-interna-correcta")
+
+
+def test_resolve_user_context_prefers_verified_jwt():
+    claims = _claims()
+    token = jwt.encode(claims, SECRET, algorithm="HS256")
+    verifier = SupabaseJWTVerifier(URL, SECRET, jwks_client=FakeJWKS(None))
+    user = resolve_user_context(authorization=f"Bearer {token}", x_user_id=str(uuid4()), verifier=verifier)
+    assert str(user.user_id) == claims["sub"] and user.access_token == token
+
+
+def test_resolve_user_context_from_gateway_headers():
+    uid = uuid4()
+    user = resolve_user_context(authorization=None, x_user_id=str(uid), x_user_area="ops", x_user_role="editor", verifier=None)
+    assert (user.user_id, user.area, user.role, user.access_token) == (uid, "ops", "editor", None)
+    assert resolve_user_context(authorization=None, x_user_id=None, verifier=None).user_id is None
+
+
+def test_resolve_user_context_errors():
+    with pytest.raises(AuthenticationError):
+        resolve_user_context(authorization=None, x_user_id="no-uuid", verifier=None)
+    with pytest.raises(AuthenticationError):
+        resolve_user_context(authorization="Bearer x.y.z", x_user_id=None, verifier=None)
 
 
 @pytest.mark.parametrize(

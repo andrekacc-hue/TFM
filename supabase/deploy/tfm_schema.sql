@@ -1,7 +1,7 @@
 -- =====================================================================
--- tfm_schema.sql — GENERADO a partir de supabase/migrations + seed.sql
--- Pegar completo en Supabase Dashboard -> SQL Editor -> Run.
--- No editar a mano: regenerar si cambian las migraciones.
+-- tfm_schema.sql — GENERADO por scripts/build_deploy_sql.py
+-- Instalación desde cero: pegar completo en Supabase -> SQL Editor -> Run.
+-- No editar a mano.
 -- =====================================================================
 begin;
 
@@ -16,7 +16,6 @@ set search_path = public, extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists pg_trgm with schema extensions;
 
-
 -- >>> 20260101000002_pgvector.sql
 -- =====================================================================
 -- 20260101000002_pgvector.sql
@@ -30,7 +29,6 @@ create extension if not exists vector with schema extensions;
 
 comment on extension vector is
   'Embeddings de 384 dimensiones (paraphrase-multilingual-MiniLM-L12-v2) con distancia coseno.';
-
 
 -- >>> 20260101000003_schemas.sql
 -- =====================================================================
@@ -83,7 +81,6 @@ $$;
 
 comment on function tfm.set_updated_at() is
   'Trigger BEFORE UPDATE que actualiza updated_at con la marca de tiempo actual.';
-
 
 -- >>> 20260101000004_tables.sql
 -- =====================================================================
@@ -267,7 +264,6 @@ create table tfm.audit_events (
 );
 create index idx_audit_created on tfm.audit_events(created_at desc);
 create index idx_audit_resource on tfm.audit_events(resource_type, resource_id);
-
 
 -- >>> 20260101000005_functions.sql
 -- =====================================================================
@@ -512,7 +508,6 @@ comment on function tfm.match_chunks(extensions.vector, float, int, text) is
 revoke execute on function tfm.match_chunks(extensions.vector, float, int, text) from public, anon;
 grant execute on function tfm.match_chunks(extensions.vector, float, int, text)
   to authenticated, service_role;
-
 
 -- >>> 20260101000006_rls_policies.sql
 -- =====================================================================
@@ -771,6 +766,63 @@ begin
 end;
 $$;
 
+-- >>> 20260101000007_match_chunks_metadata.sql
+-- =====================================================================
+-- 20260101000007_match_chunks_metadata.sql
+-- match_chunks devuelve también los metadatos del chunk (sección, página),
+-- que el ingest-service guarda desde la Fase 3. Permite citas del tipo
+-- [Fuente: Manual X, Paso 2 (pág. 3)] en lugar de "fragmento N".
+--
+-- Cambiar el tipo de retorno exige DROP + CREATE (no basta con REPLACE).
+-- =====================================================================
+set search_path = public, extensions;
+
+drop function if exists tfm.match_chunks(extensions.vector, float, int, text);
+
+create function tfm.match_chunks(
+  query_embedding extensions.vector(384),
+  match_threshold float default 0.35,
+  match_count int default 20,
+  filter_area text default null
+)
+returns table (
+  chunk_id uuid,
+  document_id uuid,
+  content text,
+  similarity float,
+  document_title text,
+  source_type text,
+  chunk_index int,
+  metadata jsonb
+)
+language sql stable
+set search_path = tfm, public, extensions
+as $$
+  select
+    c.id,
+    c.document_id,
+    c.content,
+    1 - (c.embedding <=> query_embedding) as similarity,
+    d.title,
+    d.source_type,
+    c.chunk_index,
+    coalesce(c.metadata, '{}'::jsonb)
+  from tfm.chunks c
+  join tfm.documents d on d.id = c.document_id
+  where d.status = 'indexed'
+    and (filter_area is null or d.area = filter_area)
+    and 1 - (c.embedding <=> query_embedding) > match_threshold
+  order by c.embedding <=> query_embedding
+  limit least(greatest(match_count, 1), 200);
+$$;
+
+comment on function tfm.match_chunks(extensions.vector, float, int, text) is
+  'Top-k chunks de documentos indexados por similitud coseno, con umbral, filtro de área y metadatos (sección/página).';
+
+revoke execute on function tfm.match_chunks(extensions.vector, float, int, text) from public, anon;
+grant execute on function tfm.match_chunks(extensions.vector, float, int, text)
+  to authenticated, service_role;
+
 -- >>> registro de migraciones (compatible con Supabase CLI)
 create schema if not exists supabase_migrations;
 create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);
@@ -780,6 +832,7 @@ insert into supabase_migrations.schema_migrations (version, name) values ('20260
 insert into supabase_migrations.schema_migrations (version, name) values ('20260101000004', 'tables') on conflict do nothing;
 insert into supabase_migrations.schema_migrations (version, name) values ('20260101000005', 'functions') on conflict do nothing;
 insert into supabase_migrations.schema_migrations (version, name) values ('20260101000006', 'rls_policies') on conflict do nothing;
+insert into supabase_migrations.schema_migrations (version, name) values ('20260101000007', 'match_chunks_metadata') on conflict do nothing;
 
 -- >>> seed.sql
 -- =====================================================================

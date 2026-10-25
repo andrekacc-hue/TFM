@@ -231,6 +231,8 @@ def _to_citation(index: int, chunk: RetrievedChunk) -> SourceCitation:
         title=chunk.document_title,
         source_type=chunk.source_type,
         chunk_index=chunk.chunk_index,
+        section=chunk.section,
+        page=chunk.page,
         similarity=round(chunk.similarity, 4),
         rerank_score=round(chunk.rerank_score, 4) if chunk.rerank_score is not None else None,
         excerpt=excerpt,

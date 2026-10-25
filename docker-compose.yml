@@ -325,6 +325,26 @@ services:
     networks: [soporte-net]
 
   # ------------------------------------------------------------------
+  # ingest-service — API de ingesta + worker de Redis Streams (interno)
+  # Para escalar workers: añadir réplicas con
+  #   command: ["python", "-m", "app.workers.stream_consumer"]
+  # ------------------------------------------------------------------
+  ingest-service:
+    build:
+      context: ./services
+      dockerfile: ingest-service/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      WORKER_ENABLED: "true"
+      LOG_FORMAT: json
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [soporte-net]
+
+  # ------------------------------------------------------------------
   # Jaeger (opcional) — trazas OpenTelemetry
   #   docker compose --profile observability up -d jaeger
   # ------------------------------------------------------------------

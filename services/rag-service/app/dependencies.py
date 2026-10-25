@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import Depends, Header, Request
 
@@ -15,9 +14,8 @@ from app.core.generator import Generator
 from app.core.rag_chain import RagChain, RagParams
 from app.core.reranker import CrossEncoderReranker, Reranker, SimilarityReranker
 from app.core.retriever import Retriever
-from shared.auth import SupabaseJWTVerifier, bearer_token, verify_internal_api_key
+from shared.auth import SupabaseJWTVerifier, resolve_user_context, verify_internal_api_key
 from shared.embeddings import Embedder, SentenceTransformerEmbedder
-from shared.exceptions import AuthenticationError
 from shared.logging import get_logger
 from shared.redis_client import Cache, create_cache
 from shared.schemas import UserContext
@@ -57,7 +55,9 @@ def build_container(settings: RagSettings) -> Container:
         timeout=settings.supabase_timeout_seconds,
     )
     cache = create_cache(settings.redis_url, settings.redis_cache_ttl)
-    embedder = SentenceTransformerEmbedder(settings.embedding_model, settings.embedding_dim)
+    embedder = SentenceTransformerEmbedder(
+        settings.embedding_model, settings.embedding_dim, max_seq_length=settings.embedding_max_seq_length
+    )
     reranker: Reranker = (
         CrossEncoderReranker(settings.rerank_model) if settings.rerank_enabled else SimilarityReranker()
     )
@@ -119,26 +119,14 @@ def get_user_context(
     x_user_area: Annotated[str | None, Header()] = None,
     x_user_role: Annotated[str | None, Header()] = None,
 ) -> UserContext:
-    """Resuelve el usuario de la petición.
-
-    * Con ``Authorization: Bearer <jwt>`` se verifica el token (defensa en profundidad,
-      aunque el gateway ya lo valida) y se usa para aplicar RLS en Supabase.
-    * Sin JWT, se aceptan las cabeceras ``X-User-*`` del gateway (canales como Teams,
-      donde el usuario se identifica por otra vía) y las lecturas usan service_role.
-    """
-    token = bearer_token(authorization)
-    if token:
-        if container.jwt_verifier is None:
-            raise AuthenticationError("Verificación de JWT no configurada")
-        return container.jwt_verifier.verify(token)
-
-    user_id: UUID | None = None
-    if x_user_id:
-        try:
-            user_id = UUID(x_user_id)
-        except ValueError as exc:
-            raise AuthenticationError("X-User-Id inválido") from exc
-    return UserContext(user_id=user_id, area=x_user_area, role=x_user_role)
+    """Usuario de la petición: JWT verificado (lecturas con RLS) o cabeceras ``X-User-*``."""
+    return resolve_user_context(
+        authorization=authorization,
+        x_user_id=x_user_id,
+        x_user_area=x_user_area,
+        x_user_role=x_user_role,
+        verifier=container.jwt_verifier,
+    )
 
 
 UserDep = Annotated[UserContext, Depends(get_user_context)]
