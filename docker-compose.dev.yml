@@ -25,6 +25,10 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  rag-service:
+    ports:
+      - "127.0.0.1:8001:8001"
+
   jaeger:
     ports:
       - "127.0.0.1:16686:16686"   # UI

@@ -1,0 +1,1 @@
+"""Núcleo del pipeline RAG."""

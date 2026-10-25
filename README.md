@@ -14,20 +14,104 @@ la evaluación académica.
 | 1. Frontend | Admin Portal (React + Vite + TS) · Teams Bot (Bot Framework, Python) |
 | 2. Middleware | `api-gateway` · `rag-service` · `ingest-service` · `analytics-service` (FastAPI) · Redis Streams/cache |
 | 3. Backend | Supabase: PostgreSQL 15 + pgvector · Storage · Auth (Azure AD) · RLS · Realtime · Edge Functions |
-| 4. IA | Ollama + Qwen3 4B Instruct · embeddings multilingual-MiniLM (384d) · reranker cross-encoder · adapters Claude/OpenAI |
+| 4. IA | Ollama (`gemma4:31b-cloud`, plan gratuito) · embeddings multilingual-MiniLM (384d) · reranker cross-encoder multilingüe · adapters Claude/OpenAI |
 
 ## Estado por fases
 
 | Fase | Contenido | Estado |
 |------|-----------|--------|
 | 1 | Infraestructura, Supabase, migraciones, bootstrap | ✅ |
-| 2 | Librería compartida + rag-service | ⏳ |
+| 2 | Librería compartida + rag-service | ✅ |
 | 3 | ingest-service + worker Redis Streams | ⏳ |
 | 4 | api-gateway + analytics-service | ⏳ |
 | 5 | Edge Functions de Supabase | ⏳ |
 | 6 | Frontend React (Admin Portal) | ⏳ |
 | 7 | Bot de Microsoft Teams | ⏳ |
 | 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+
+---
+
+## Fase 2 — Librería compartida y rag-service
+
+### Pipeline
+
+```
+pregunta ─► guardrails de entrada ─► embedding (MiniLM 384d) ─► tfm.match_chunks (pgvector, top-20)
+         ─► reranking cross-encoder (top-5) ─► abstención si no hay evidencia
+         ─► prompt + LLM (adapter) ─► guardrails de salida ─► tfm.queries ─► respuesta + fuentes
+```
+
+| Componente | Archivo | Responsabilidad |
+|------------|---------|-----------------|
+| Configuración | `services/shared/shared/config.py` | pydantic-settings; lee `.env` de la raíz |
+| Logging | `shared/logging.py`, `shared/middleware.py` | structlog JSON + `X-Trace-Id` propagado entre servicios |
+| Supabase | `shared/supabase_client.py` | PostgREST con service_role **o** con el JWT del usuario (RLS) |
+| Cache | `shared/redis_client.py` | Redis opcional con *circuit breaker* (falla en < 1 s) |
+| Auth | `shared/auth.py` | JWT de Supabase (ES256 vía JWKS y HS256) + clave interna |
+| Embeddings | `shared/embeddings.py` | sentence-transformers, compartido con la ingesta |
+| Adapters LLM | `rag-service/app/adapters/` | Ollama · Claude · OpenAI tras la interfaz `LLMAdapter` |
+| Núcleo | `rag-service/app/core/` | retriever, reranker, generator, guardrails, prompts, rag_chain |
+
+### Decisiones técnicas
+
+- **Patrón Adapter para el LLM.** Cambiar de proveedor es cambiar `LLM_PROVIDER`, sin tocar el código de negocio.
+- **PostgREST por `httpx` en lugar de `supabase-py`.** El cliente oficial guarda la sesión como estado global; aquí
+  cada llamada elige service_role o el JWT del usuario, así RLS filtra por área sin crear un cliente por petición.
+- **Cadena explícita en lugar de LangChain.** Cada etapa es una clase pequeña e inyectable, con latencia
+  medida por separado (`timings` en la respuesta), lo que simplifica los tests y la evaluación.
+- **Reranker multilingüe** (`mmarco-mMiniLMv2-L12-H384-v1`) en lugar de `ms-marco-MiniLM-L-6-v2`, que solo
+  está entrenado en inglés. Medido sobre el corpus demo: 8/15 frente a 6/15 fragmentos relevantes en el top-5.
+- **Guardrails deterministas.** Bloquean la inyección de prompts y la evasión de controles (también en formas
+  conjugadas), enmascaran tarjetas (Luhn) y credenciales, y redactan secretos en la salida. Cada bloqueo es auditable.
+- **Abstención en dos niveles:** sin contexto sobre el umbral de similitud (sin llamar al LLM) o cuando el modelo
+  declara falta de evidencia. En ambos casos se devuelve la frase exacta del prompt de sistema.
+
+### Instalación (Windows, sin Docker)
+
+```powershell
+cd C:\Frontend\TFM\soporte-bancario-rag
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+.\.venv\Scripts\python.exe -m pip install -e "services\shared[ml,dev]" -e "services\rag-service[dev]"
+```
+
+### Tests
+
+```powershell
+cd services\shared;      ..\..\.venv\Scripts\python.exe -m pytest --cov=shared   # 41 tests, 99 %
+cd ..\rag-service;       ..\..\.venv\Scripts\python.exe -m pytest --cov=app      # 75 tests, 96 %
+```
+
+### Prueba manual
+
+```powershell
+cd services\rag-service
+..\..\.venv\Scripts\python.exe scripts\rag_cli.py health
+..\..\.venv\Scripts\python.exe scripts\rag_cli.py seed-demo        # 3 documentos demo (idempotente)
+..\..\.venv\Scripts\python.exe scripts\rag_cli.py ask "El batch de cierre quedó en RUNNING, ¿qué hago?"
+..\..\.venv\Scripts\python.exe scripts\rag_cli.py clean-demo       # elimina el corpus demo
+
+# Servicio HTTP + Swagger en http://localhost:8001/docs
+..\..\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --port 8001
+```
+
+Llamada HTTP (cabecera obligatoria `X-Internal-Api-Key`, valor de `INTERNAL_API_KEY` en `.env`):
+
+```bash
+curl -X POST http://localhost:8001/v1/query -H "Content-Type: application/json" \
+  -H "X-Internal-Api-Key: <INTERNAL_API_KEY>" -H "X-User-Id: <uuid del usuario>" \
+  -d '{"question": "Varios cajeros rechazan retiros con código 91", "channel": "web"}'
+```
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `POST /v1/query` | Respuesta con `sources`, `abstained`, `timings`, `usage`, `query_id`, `trace_id` |
+| `POST /v1/feedback` | 👍/👎 sobre una consulta propia (upsert por usuario) |
+| `GET /health` · `GET /ready` | Liveness · readiness (Supabase, LLM, cache, modelos) |
+
+Resultados de referencia (corpus demo, `gemma4:31b-cloud`, CPU sin GPU): unos **2,2 s** por consulta
+(retrieval ~0,2 s + rerank ~0,2 s + LLM ~1,8 s). Las preguntas fuera del corpus se abstienen y las inyecciones
+se bloquean en ~1 ms.
 
 ---
 
