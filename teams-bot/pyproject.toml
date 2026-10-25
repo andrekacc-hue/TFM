@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "teams-bot"
+version = "0.7.0"
+description = "Bot de Microsoft Teams del asistente de soporte TI (Microsoft 365 Agents SDK)."
+requires-python = ">=3.11"
+# Microsoft 365 Agents SDK: sucesor oficial del Bot Framework SDK (archivado en enero de 2026)
+dependencies = [
+  "microsoft-agents-hosting-aiohttp>=1.9,<2",
+  "microsoft-agents-hosting-core>=1.9,<2",
+  "microsoft-agents-activity>=1.9,<2",
+  "microsoft-agents-authentication-msal>=1.9,<2",
+  "aiohttp>=3.10",
+  "httpx>=0.27",
+  "pydantic-settings>=2.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23", "pytest-cov>=5.0", "pytest-aiohttp>=1.0", "respx>=0.21", "Pillow>=10"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 70

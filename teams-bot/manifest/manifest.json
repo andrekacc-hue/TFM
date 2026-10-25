@@ -1,0 +1,45 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "{{MICROSOFT_APP_ID}}",
+  "developer": {
+    "name": "TFM Máster IA · UNIR",
+    "websiteUrl": "https://github.com/andrekacc-hue/TFM",
+    "privacyUrl": "https://github.com/andrekacc-hue/TFM#privacidad",
+    "termsOfUseUrl": "https://github.com/andrekacc-hue/TFM#uso"
+  },
+  "name": {
+    "short": "Soporte TI IA",
+    "full": "Asistente de soporte técnico de TI Producción"
+  },
+  "description": {
+    "short": "Consulta procedimientos de TI Producción con respuestas citadas.",
+    "full": "Asistente con IA (RAG) que responde consultas técnicas de TI Producción usando solo la documentación autorizada: manuales, procedimientos, incidentes y FAQ. Cada respuesta cita su fuente (documento, sección y página); si no hay evidencia suficiente recomienda escalar el caso. Comandos: ayuda, estado, reiniciar."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0F766E",
+  "bots": [
+    {
+      "botId": "{{MICROSOFT_APP_ID}}",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal", "team", "groupChat"],
+          "commands": [
+            { "title": "ayuda", "description": "Qué puedo hacer y ejemplos de consultas" },
+            { "title": "estado", "description": "Estado del sistema y de tu cuenta" },
+            { "title": "reiniciar", "description": "Reinicia la conversación" }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

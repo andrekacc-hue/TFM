@@ -26,8 +26,39 @@ la evaluación académica.
 | 4 | api-gateway + analytics-service | ✅ |
 | 5 | Edge Functions de Supabase | ✅ |
 | 6 | Frontend React (Admin Portal) | ✅ |
-| 7 | Bot de Microsoft Teams | ⏳ |
+| 7 | Bot de Microsoft Teams | ✅ (código y pruebas; registro en Azure según [guía](docs/teams-bot.md)) |
 | 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+
+---
+
+## Fase 7 — Bot de Microsoft Teams
+
+`teams-bot/` · aiohttp + **Microsoft 365 Agents SDK** · Adaptive Cards 1.5 · puerto 3978.
+
+- **SDK:** la especificación pedía el Bot Framework SDK, pero su repositorio de Python se archivó en enero de 2026
+  y Microsoft dejó de darle soporte el 31/12/2025. Se usa su sucesor oficial; el protocolo con Teams es el mismo.
+  El paquete `microsoft-agents-hosting-teams` también está deprecado: el correo del usuario se obtiene con el
+  cliente REST del SDK base, sin dependencias adicionales.
+- **Identidad:** el bot resuelve el correo corporativo del usuario de Teams y llama al gateway con
+  `X-Internal-Api-Key` + `X-User-Email`. Se aplican su rol y su área (RLS incluido) y la consulta queda en
+  `tfm.queries` con `channel = teams`.
+- **Tarjetas:** respuesta con citas 📄 y fuentes (sección, página, similitud), *Ver extractos*, 👍 y 👎 con
+  comentario, avisos de abstención y de bloqueo por guardrails, bienvenida con ejemplos pulsables, estado del sistema.
+- **Comandos:** `ayuda`, `estado`, `reiniciar` (con o sin `/`; también en el menú de comandos de Teams).
+- **Modo anónimo** sin `MICROSOFT_APP_ID` para pruebas locales. En modo Azure rechaza (401) toda petición sin token
+  de Bot Service.
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build teams-bot
+.\.venv\Scripts\python.exe scripts\package_teams_app.py        # paquete .zip para Teams (requiere MICROSOFT_APP_ID)
+cd teams-bot; ..\.venv\Scripts\python.exe -m pytest --cov=app  # 19 tests, 95 %
+```
+
+Verificado contra el stack real con Teams simulado: un usuario de `operaciones` pregunta por el HSM, recibe la
+tarjeta en 2,6 s citando PROC-SEG-021, valora con 👍 y la consulta queda en `tfm.queries` con canal `teams`, su
+usuario y el feedback.
+
+**Registro en Azure, ngrok e instalación en Teams:** guía paso a paso en [`docs/teams-bot.md`](docs/teams-bot.md).
 
 ---
 

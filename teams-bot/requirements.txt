@@ -1,0 +1,8 @@
+# Microsoft 365 Agents SDK (sucesor del Bot Framework SDK, archivado en enero de 2026)
+microsoft-agents-hosting-aiohttp>=1.9,<2
+microsoft-agents-hosting-core>=1.9,<2
+microsoft-agents-activity>=1.9,<2
+microsoft-agents-authentication-msal>=1.9,<2
+aiohttp>=3.10
+httpx>=0.27
+pydantic-settings>=2.3

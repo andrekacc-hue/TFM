@@ -36,3 +36,6 @@ reports/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Paquete generado de la app de Teams
+teams-bot/manifest/build/

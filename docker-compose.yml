@@ -420,6 +420,24 @@ services:
     networks: [soporte-net]
 
   # ------------------------------------------------------------------
+  # teams-bot — Bot de Microsoft Teams (Microsoft 365 Agents SDK), :3978
+  # Teams llega a /api/messages a través de un túnel (ngrok) o un dominio público.
+  # ------------------------------------------------------------------
+  teams-bot:
+    build:
+      context: ./teams-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      BACKEND_URL: http://api-gateway:8000
+    ports:
+      - "3978:3978"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks: [soporte-net]
+
+  # ------------------------------------------------------------------
   # Jaeger (opcional) — trazas OpenTelemetry
   #   docker compose --profile observability up -d jaeger
   # ------------------------------------------------------------------
