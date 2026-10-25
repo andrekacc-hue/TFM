@@ -1,0 +1,8 @@
+# Los scripts y SQL se montan/ejecutan dentro de contenedores Linux: forzar LF.
+*.sh    text eol=lf
+*.sql   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+Makefile text eol=lf
+.env*   text eol=lf
+*.ps1   text eol=crlf

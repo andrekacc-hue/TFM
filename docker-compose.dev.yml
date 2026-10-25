@@ -1,0 +1,31 @@
+# =====================================================================
+#  Overrides de desarrollo: expone servicios internos SOLO en 127.0.0.1
+#  para depurar desde el host (psql, redis-cli, curl a Ollama, Jaeger).
+#
+#  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# =====================================================================
+services:
+  supabase-db:
+    ports:
+      - "127.0.0.1:54322:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  ollama:
+    ports:
+      - "127.0.0.1:11434:11434"
+    # GPU NVIDIA (Docker Desktop + WSL2 con drivers CUDA): descomentar
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  jaeger:
+    ports:
+      - "127.0.0.1:16686:16686"   # UI
+      - "127.0.0.1:4318:4318"     # OTLP HTTP
