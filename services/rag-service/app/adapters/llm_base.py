@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import httpx
 
 from shared.exceptions import LLMProviderError
+from shared.http import async_client
 
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
@@ -54,7 +55,7 @@ class LLMAdapter(ABC):
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.model = model
-        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+        self._client = async_client(timeout=timeout, transport=transport)
 
     @abstractmethod
     async def generate(

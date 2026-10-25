@@ -1,10 +1,26 @@
 # Comandos de uso frecuente (Linux/macOS/WSL/Git Bash con make).
 # En PowerShell usa scripts\bootstrap.ps1 y docker compose directamente.
 
+# Modo cloud (por defecto): Supabase Cloud + Ollama nativo; el compose levanta Redis y los microservicios.
+# Modo self-hosted: make up-local (añade Supabase y Ollama en contenedores).
 COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml
+LOCAL_PROFILES := --profile supabase-local --profile ollama-local
 
 .DEFAULT_GOAL := help
-.PHONY: help bootstrap up down restart ps logs migrate seed test-db psql pull-model observability reset
+.PHONY: help bootstrap up up-local down restart ps logs migrate seed test test-db test-integration openapi psql pull-model observability reset
+
+PY := .venv/Scripts/python.exe
+SERVICES := shared rag-service ingest-service analytics-service api-gateway
+
+test: ## Tests unitarios de los 5 paquetes con cobertura
+	@for s in $(SERVICES); do cov=app; [ $$s = shared ] && cov=shared; \
+	  echo "== $$s =="; (cd services/$$s && ../../$(PY) -m pytest -q --cov=$$cov) || exit 1; done
+
+test-integration: ## Tests extremo a extremo contra el stack levantado (crea y borra usuarios temporales)
+	$(PY) -m pytest tests/integration -v
+
+openapi: ## Exporta las especificaciones OpenAPI a docs/api/
+	$(PY) scripts/export_openapi.py
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -12,11 +28,14 @@ help: ## Muestra esta ayuda
 bootstrap: ## Setup completo: .env, stack, migraciones, seed, admin demo, modelo
 	./scripts/bootstrap.sh
 
-up: ## Levanta la infraestructura
-	$(COMPOSE) up -d
+up: ## Levanta Redis y los microservicios (modo cloud)
+	$(COMPOSE) up -d --build
 
-down: ## Detiene la infraestructura (conserva volúmenes)
-	$(COMPOSE) down
+up-local: ## Levanta todo, incluido Supabase y Ollama en contenedores (modo self-hosted)
+	$(COMPOSE) $(LOCAL_PROFILES) up -d --build
+
+down: ## Detiene todos los contenedores (conserva volúmenes)
+	$(COMPOSE) $(LOCAL_PROFILES) --profile observability down
 
 restart: down up ## Reinicia la infraestructura
 
@@ -35,14 +54,14 @@ seed: ## Aplica migraciones y carga datos de ejemplo
 test-db: ## Ejecuta los tests pgTAP de la base de datos
 	./scripts/bootstrap.sh --test-only
 
-psql: ## Consola psql en la base de datos
-	$(COMPOSE) exec supabase-db psql -h localhost -U postgres -d postgres
+psql: ## Consola psql en la base de datos (modo self-hosted)
+	$(COMPOSE) $(LOCAL_PROFILES) exec supabase-db psql -h localhost -U postgres -d postgres
 
-pull-model: ## Descarga el modelo configurado en OLLAMA_MODEL
-	$(COMPOSE) exec ollama ollama pull $$(grep -E '^OLLAMA_MODEL=' .env | cut -d= -f2-)
+pull-model: ## Descarga el modelo configurado en OLLAMA_MODEL (modo self-hosted)
+	$(COMPOSE) $(LOCAL_PROFILES) exec ollama ollama pull $$(grep -E '^OLLAMA_MODEL=' .env | cut -d= -f2-)
 
 observability: ## Levanta Jaeger (UI en http://localhost:16686)
 	$(COMPOSE) --profile observability up -d jaeger
 
 reset: ## DESTRUCTIVO: elimina contenedores y volúmenes (BD, Storage, Redis, modelos)
-	$(COMPOSE) --profile observability down -v
+	$(COMPOSE) $(LOCAL_PROFILES) --profile observability down -v

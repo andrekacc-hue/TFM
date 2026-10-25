@@ -30,7 +30,8 @@ $RootDir = Split-Path -Parent $PSScriptRoot
 Set-Location $RootDir
 
 $EnvFile = Join-Path $RootDir '.env'
-$ComposeArgs = @('compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.dev.yml')
+# Modo self-hosted: Supabase y Ollama en contenedores (perfiles del compose)
+$ComposeArgs = @('compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.dev.yml', '--profile', 'supabase-local', '--profile', 'ollama-local')
 $ContainerSupabaseDir = '/workspace/supabase'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 

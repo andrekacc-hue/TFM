@@ -1,0 +1,480 @@
+openapi: 3.1.0
+info:
+  title: rag-service
+  description: 'Orquestación RAG del Sistema de Soporte TI Produbanco: retrieval (pgvector), reranking (cross-encoder),
+    generación con LLM intercambiable y guardrails.'
+  version: 0.2.0
+paths:
+  /v1/query:
+    post:
+      tags:
+      - rag
+      summary: Responder una consulta con RAG
+      description: 'Recupera fragmentos relevantes, genera una respuesta citada y la registra.
+
+
+        Si no hay evidencia suficiente devuelve la frase de abstención (``abstained=true``).'
+      operationId: query_v1_query_post
+      parameters:
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-user-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Id
+      - name: x-user-area
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Area
+      - name: x-user-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '401':
+          description: Clave interna o JWT inválidos
+        '502':
+          description: Fallo del LLM o de Supabase
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/feedback:
+    post:
+      tags:
+      - rag
+      summary: Valorar una respuesta
+      description: Registra (o actualiza) la valoración 👍/👎 del usuario sobre una de sus consultas.
+      operationId: feedback_v1_feedback_post
+      parameters:
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-user-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Id
+      - name: x-user-area
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Area
+      - name: x-user-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - health
+      summary: Liveness
+      description: El proceso está vivo (no comprueba dependencias).
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /ready:
+    get:
+      tags:
+      - health
+      summary: Readiness
+      description: Comprueba Supabase, el LLM, la cache y la carga de modelos.
+      operationId: ready_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+components:
+  schemas:
+    FeedbackRequest:
+      properties:
+        query_id:
+          type: string
+          format: uuid
+          title: Query Id
+        rating:
+          type: integer
+          enum:
+          - -1
+          - 1
+          title: Rating
+        comment:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Comment
+      type: object
+      required:
+      - query_id
+      - rating
+      title: FeedbackRequest
+      description: Valoración de una respuesta (👍 = 1, 👎 = -1).
+    FeedbackResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        query_id:
+          type: string
+          format: uuid
+          title: Query Id
+        rating:
+          type: integer
+          title: Rating
+      type: object
+      required:
+      - id
+      - query_id
+      - rating
+      title: FeedbackResponse
+      description: Feedback registrado.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          - error
+          title: Status
+        service:
+          type: string
+          title: Service
+        version:
+          type: string
+          title: Version
+        checks:
+          additionalProperties:
+            type: string
+          type: object
+          title: Checks
+      type: object
+      required:
+      - status
+      - service
+      - version
+      title: HealthResponse
+      description: Estado de un servicio y de sus dependencias.
+    QueryRequest:
+      properties:
+        question:
+          type: string
+          maxLength: 2000
+          minLength: 3
+          title: Question
+          description: Pregunta del usuario
+        channel:
+          type: string
+          enum:
+          - web
+          - teams
+          - api
+          title: Channel
+          default: api
+        area:
+          anyOf:
+          - type: string
+            pattern: ^[a-z0-9_-]+$
+          - type: 'null'
+          title: Area
+          description: Filtra la búsqueda a un área (solo aplica a llamadas de sistema)
+        top_k:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Top K
+          description: Fuentes a usar tras el reranking
+      type: object
+      required:
+      - question
+      title: QueryRequest
+      description: Consulta en lenguaje natural al asistente.
+    QueryResponse:
+      properties:
+        query_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Query Id
+          description: Id en tfm.queries; necesario para el feedback
+        answer:
+          type: string
+          title: Answer
+        sources:
+          items:
+            $ref: '#/components/schemas/SourceCitation'
+          type: array
+          title: Sources
+        abstained:
+          type: boolean
+          title: Abstained
+          default: false
+        abstention_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Abstention Reason
+        llm_provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Llm Provider
+        llm_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Llm Model
+        usage:
+          $ref: '#/components/schemas/Usage'
+        timings:
+          $ref: '#/components/schemas/Timings'
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+      type: object
+      required:
+      - answer
+      title: QueryResponse
+      description: Respuesta del asistente con fuentes verificables.
+    SourceCitation:
+      properties:
+        index:
+          type: integer
+          title: Index
+          description: Número de la fuente en el contexto ([1], [2], ...)
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        chunk_id:
+          type: string
+          format: uuid
+          title: Chunk Id
+        title:
+          type: string
+          title: Title
+        source_type:
+          anyOf:
+          - type: string
+            enum:
+            - manual
+            - procedimiento
+            - incidente
+            - faq
+          - type: string
+          title: Source Type
+        chunk_index:
+          type: integer
+          title: Chunk Index
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+          description: Encabezado de la sección de origen
+        page:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page
+          description: Página de origen (PDF)
+        similarity:
+          type: number
+          title: Similarity
+        rerank_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Rerank Score
+        excerpt:
+          type: string
+          title: Excerpt
+      type: object
+      required:
+      - index
+      - document_id
+      - chunk_id
+      - title
+      - source_type
+      - chunk_index
+      - similarity
+      - excerpt
+      title: SourceCitation
+      description: Fragmento documental usado para fundamentar la respuesta.
+    Timings:
+      properties:
+        guardrails_ms:
+          type: number
+          title: Guardrails Ms
+          default: 0.0
+        retrieval_ms:
+          type: number
+          title: Retrieval Ms
+          default: 0.0
+        rerank_ms:
+          type: number
+          title: Rerank Ms
+          default: 0.0
+        generation_ms:
+          type: number
+          title: Generation Ms
+          default: 0.0
+        total_ms:
+          type: number
+          title: Total Ms
+          default: 0.0
+      type: object
+      title: Timings
+      description: Latencia por etapa del pipeline RAG, en milisegundos.
+    Usage:
+      properties:
+        tokens_input:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Tokens Input
+        tokens_output:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Tokens Output
+      type: object
+      title: Usage
+      description: Consumo de tokens del LLM.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

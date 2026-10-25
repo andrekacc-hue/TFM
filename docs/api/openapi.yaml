@@ -1,0 +1,883 @@
+openapi: 3.1.0
+info:
+  title: Soporte TI Produbanco — API
+  description: '
+
+    API pública del **Sistema Inteligente de Soporte Técnico** (TI Producción, Produbanco).
+
+
+    **Autenticación:** `Authorization: Bearer <access_token de Supabase Auth>`. El rol y el área
+
+    del usuario se leen de `tfm.profiles`. Los servicios internos (bot de Teams) usan
+
+    `X-Internal-Api-Key` y, opcionalmente, `X-User-Email` para actuar en nombre de un usuario.
+
+
+    | Rol | Puede |
+
+    |-----|-------|
+
+    | viewer | consultar al asistente y valorar respuestas |
+
+    | editor | + subir y reindexar documentos de su área, ver métricas |
+
+    | admin  | + todas las áreas, cola de ingesta y exportación de reportes |
+
+
+    Cada respuesta incluye `X-Trace-Id`, que identifica la petición en los logs de todos los
+
+    servicios y en `tfm.queries.trace_id`.
+
+    '
+  version: 0.4.0
+paths:
+  /health:
+    get:
+      tags:
+      - health
+      summary: Liveness
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /ready:
+    get:
+      tags:
+      - health
+      summary: Readiness agregada
+      description: 'Comprueba Supabase y el ``/health`` de cada servicio interno.
+
+
+        ``degraded`` si falta analytics (las consultas siguen funcionando); ``error`` si faltan
+
+        Supabase o el rag-service.'
+      operationId: ready_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/me:
+    get:
+      tags:
+      - asistente
+      summary: Usuario actual
+      description: Rol y área leídos de ``tfm.profiles`` (el portal los usa para mostrar u ocultar opciones).
+      operationId: me_api_v1_me_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/query:
+    post:
+      tags:
+      - asistente
+      summary: Preguntar al asistente
+      description: 'Respuesta fundamentada con fuentes. Con sesión de usuario, el rag-service busca con su
+
+        JWT y Supabase aplica RLS: cada usuario solo recupera documentos de su área y ``general``.'
+      operationId: query_api_v1_query_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '401':
+          description: Sin sesión
+        '429':
+          description: Límite de consultas superado
+        '502':
+          description: Fallo del LLM
+        '503':
+          description: rag-service no disponible
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/feedback:
+    post:
+      tags:
+      - asistente
+      summary: Valorar una respuesta
+      operationId: feedback_api_v1_feedback_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents:
+    post:
+      tags:
+      - documentos
+      summary: Subir un documento
+      description: 'Reenvía el multipart sin reinterpretarlo; el ingest-service valida formato, área y duplicados.
+
+
+        Un editor solo puede subir documentos a su área; un admin, a cualquiera.'
+      operationId: upload_api_v1_documents_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              - source_type
+              - area
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF, DOCX, Markdown o TXT
+                source_type:
+                  type: string
+                  enum:
+                  - manual
+                  - procedimiento
+                  - incidente
+                  - faq
+                area:
+                  type: string
+                  pattern: ^[a-z0-9_-]+$
+                title:
+                  type: string
+  /api/v1/documents/queue/stats:
+    get:
+      tags:
+      - documentos
+      summary: Estado de la cola de ingesta
+      operationId: queue_stats_api_v1_documents_queue_stats_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents/{document_id}/reindex:
+    post:
+      tags:
+      - documentos
+      summary: Reprocesar un documento
+      operationId: reindex_api_v1_documents__document_id__reindex_post
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents/{document_id}/status:
+    get:
+      tags:
+      - documentos
+      summary: Estado de ingesta
+      operationId: status_api_v1_documents__document_id__status_get
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/analytics/{metric}:
+    get:
+      tags:
+      - analítica
+      summary: Métricas del asistente
+      description: 'Parámetros admitidos: ``from``, ``to`` (ISO 8601), ``channel``, ``bucket`` y ``limit``,
+
+        según la métrica. Disponible para editores y administradores.'
+      operationId: metric_api_v1_analytics__metric__get
+      parameters:
+      - name: metric
+        in: path
+        required: true
+        schema:
+          enum:
+          - summary
+          - timeseries
+          - top-documents
+          - unanswered
+          - knowledge-base
+          type: string
+          title: Metric
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/reports/queries.{fmt}:
+    get:
+      tags:
+      - analítica
+      summary: Exportar consultas (CSV / JSON)
+      description: 'Incluye preguntas e identificadores de usuario: solo administradores.'
+      operationId: export_api_v1_reports_queries__fmt__get
+      parameters:
+      - name: fmt
+        in: path
+        required: true
+        schema:
+          enum:
+          - csv
+          - json
+          type: string
+          title: Fmt
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: x-user-email
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Email
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    FeedbackRequest:
+      properties:
+        query_id:
+          type: string
+          format: uuid
+          title: Query Id
+        rating:
+          type: integer
+          enum:
+          - -1
+          - 1
+          title: Rating
+        comment:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Comment
+      type: object
+      required:
+      - query_id
+      - rating
+      title: FeedbackRequest
+      description: Valoración de una respuesta (👍 = 1, 👎 = -1).
+    FeedbackResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        query_id:
+          type: string
+          format: uuid
+          title: Query Id
+        rating:
+          type: integer
+          title: Rating
+      type: object
+      required:
+      - id
+      - query_id
+      - rating
+      title: FeedbackResponse
+      description: Feedback registrado.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          - error
+          title: Status
+        service:
+          type: string
+          title: Service
+        version:
+          type: string
+          title: Version
+        checks:
+          additionalProperties:
+            type: string
+          type: object
+          title: Checks
+      type: object
+      required:
+      - status
+      - service
+      - version
+      title: HealthResponse
+      description: Estado de un servicio y de sus dependencias.
+    Me:
+      properties:
+        user_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: User Id
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        area:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Area
+      type: object
+      required:
+      - user_id
+      - email
+      - role
+      - area
+      title: Me
+      description: Usuario autenticado con su rol y área vigentes.
+    QueryRequest:
+      properties:
+        question:
+          type: string
+          maxLength: 2000
+          minLength: 3
+          title: Question
+          description: Pregunta del usuario
+        channel:
+          type: string
+          enum:
+          - web
+          - teams
+          - api
+          title: Channel
+          default: api
+        area:
+          anyOf:
+          - type: string
+            pattern: ^[a-z0-9_-]+$
+          - type: 'null'
+          title: Area
+          description: Filtra la búsqueda a un área (solo aplica a llamadas de sistema)
+        top_k:
+          anyOf:
+          - type: integer
+            maximum: 10.0
+            minimum: 1.0
+          - type: 'null'
+          title: Top K
+          description: Fuentes a usar tras el reranking
+      type: object
+      required:
+      - question
+      title: QueryRequest
+      description: Consulta en lenguaje natural al asistente.
+    QueryResponse:
+      properties:
+        query_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Query Id
+          description: Id en tfm.queries; necesario para el feedback
+        answer:
+          type: string
+          title: Answer
+        sources:
+          items:
+            $ref: '#/components/schemas/SourceCitation'
+          type: array
+          title: Sources
+        abstained:
+          type: boolean
+          title: Abstained
+          default: false
+        abstention_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Abstention Reason
+        llm_provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Llm Provider
+        llm_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Llm Model
+        usage:
+          $ref: '#/components/schemas/Usage'
+        timings:
+          $ref: '#/components/schemas/Timings'
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+      type: object
+      required:
+      - answer
+      title: QueryResponse
+      description: Respuesta del asistente con fuentes verificables.
+    SourceCitation:
+      properties:
+        index:
+          type: integer
+          title: Index
+          description: Número de la fuente en el contexto ([1], [2], ...)
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        chunk_id:
+          type: string
+          format: uuid
+          title: Chunk Id
+        title:
+          type: string
+          title: Title
+        source_type:
+          anyOf:
+          - type: string
+            enum:
+            - manual
+            - procedimiento
+            - incidente
+            - faq
+          - type: string
+          title: Source Type
+        chunk_index:
+          type: integer
+          title: Chunk Index
+        section:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Section
+          description: Encabezado de la sección de origen
+        page:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page
+          description: Página de origen (PDF)
+        similarity:
+          type: number
+          title: Similarity
+        rerank_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Rerank Score
+        excerpt:
+          type: string
+          title: Excerpt
+      type: object
+      required:
+      - index
+      - document_id
+      - chunk_id
+      - title
+      - source_type
+      - chunk_index
+      - similarity
+      - excerpt
+      title: SourceCitation
+      description: Fragmento documental usado para fundamentar la respuesta.
+    Timings:
+      properties:
+        guardrails_ms:
+          type: number
+          title: Guardrails Ms
+          default: 0.0
+        retrieval_ms:
+          type: number
+          title: Retrieval Ms
+          default: 0.0
+        rerank_ms:
+          type: number
+          title: Rerank Ms
+          default: 0.0
+        generation_ms:
+          type: number
+          title: Generation Ms
+          default: 0.0
+        total_ms:
+          type: number
+          title: Total Ms
+          default: 0.0
+      type: object
+      title: Timings
+      description: Latencia por etapa del pipeline RAG, en milisegundos.
+    Usage:
+      properties:
+        tokens_input:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Tokens Input
+        tokens_output:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Tokens Output
+      type: object
+      title: Usage
+      description: Consumo de tokens del LLM.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

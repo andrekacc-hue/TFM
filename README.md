@@ -23,11 +23,95 @@ la evaluación académica.
 | 1 | Infraestructura, Supabase, migraciones, bootstrap | ✅ |
 | 2 | Librería compartida + rag-service | ✅ |
 | 3 | ingest-service + worker Redis Streams | ✅ |
-| 4 | api-gateway + analytics-service | ⏳ |
+| 4 | api-gateway + analytics-service | ✅ |
 | 5 | Edge Functions de Supabase | ⏳ |
 | 6 | Frontend React (Admin Portal) | ⏳ |
 | 7 | Bot de Microsoft Teams | ⏳ |
 | 8 | Evaluación RAGAs, observabilidad, documentación | ⏳ |
+
+---
+
+## Fase 4 — API Gateway y Analytics
+
+### Arranque del sistema completo (Docker)
+
+```powershell
+cd C:\Frontend\TFM\soporte-bancario-rag
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build   # o: make up
+Invoke-RestMethod http://localhost:8000/ready        # {"status":"ok", "checks": {...4 servicios}}
+```
+
+| Modo | Comando | Qué levanta |
+|------|---------|-------------|
+| **Cloud** (por defecto) | `docker compose ... up -d` | Redis + rag + ingest + analytics + gateway. Supabase Cloud y Ollama nativo del host (`host.docker.internal`) |
+| Self-hosted | `make up-local` / `scripts/bootstrap.*` | Lo anterior + Supabase y Ollama en contenedores (perfiles `supabase-local`, `ollama-local`) |
+
+Solo el gateway se publica (`8000`); los servicios internos se exponen únicamente en `127.0.0.1` con el
+override de desarrollo.
+
+### API pública (`http://localhost:8000/docs`)
+
+| Endpoint | Rol mínimo | Límite por defecto |
+|----------|-----------|--------------------|
+| `GET /api/v1/me` | viewer | 120/min |
+| `POST /api/v1/query` | viewer · servicio interno | 20/min |
+| `POST /api/v1/feedback` | viewer | 120/min |
+| `POST /api/v1/documents` (multipart) | editor (su área) | 10/min |
+| `POST /api/v1/documents/{id}/reindex` · `GET .../status` | editor | 10/min · — |
+| `GET /api/v1/documents/queue/stats` | admin | — |
+| `GET /api/v1/analytics/{summary,timeseries,top-documents,unanswered,knowledge-base}` | editor | 120/min |
+| `GET /api/v1/reports/queries.{csv,json}` | admin | 5/min |
+| `GET /health` · `GET /ready` | — | — |
+
+Especificación exportada: [`docs/api/openapi.yaml`](docs/api/openapi.yaml) (pública) y
+[`docs/api/internal/`](docs/api/internal/) (servicios internos). Se regenera con `make openapi`.
+
+### Decisiones técnicas
+
+- **El rol y el área se leen de `tfm.profiles` en cada petición** (cache de 60 s), no del JWT: si un admin
+  degrada a un usuario, el cambio se aplica en un minuto sin esperar a que caduque su token.
+- **RLS de extremo a extremo.** El gateway reenvía el JWT del usuario al rag-service, que busca con él;
+  Supabase filtra por área. El área que envíe un viewer o un editor se ignora: solo un admin puede elegirla.
+- **Servicios internos** (bot de Teams, Fase 7): `X-Internal-Api-Key` + `X-User-Email` para actuar en nombre de
+  un usuario registrado. El correo se compara de forma **exacta**: con `ilike`, un `_` funcionaría como comodín
+  y permitiría suplantar a otro usuario (hay un test para este caso).
+- **Rate limiting con `limits`** (la librería sobre la que se construye slowapi) usada directamente: los límites
+  salen de la configuración, los contadores se comparten entre réplicas vía Redis, la API es asíncrona y, si Redis
+  falla, deja pasar la petición (*fail-open*) y lo registra.
+- **Proxy transparente.** Las subidas multipart se reenvían sin reinterpretarlas (con límite de tamaño) y los
+  errores de los servicios llegan al cliente con su formato y código originales. Un servicio caído devuelve 503
+  y un *timeout* devuelve 504.
+- **Métricas calculadas en PostgreSQL** (migración 08: `tfm.metrics_*`). Percentiles y tasas se calculan en
+  la base de datos en lugar de traer las filas a Python. `tfm.queries` guarda además la latencia por etapa y el
+  motivo de abstención.
+- **"Preguntas sin respuesta"** (`/analytics/unanswered`): las abstenciones agrupadas señalan qué documentación
+  falta. Los bloqueos de los guardrails se excluyen.
+- **Contexto SSL compartido** entre todos los clientes HTTP. Crear uno por cliente costaba ~1 s en Windows y
+  hacía que el *setup* de cada test del gateway tardara 5,5 s.
+- **Imágenes Docker.** El usuario sin privilegios se crea antes de descargar los modelos: el `chown -R`
+  posterior duplicaba ~1 GB. rag-service bajó de 5,7 a 3,9 GB.
+
+### Hallazgo de la integración: rol asignado por la API de Supabase
+
+La API de administración de Supabase Auth inserta el usuario solo con `{provider}` y **después** actualiza
+`app_metadata` con el rol y el área, así que el trigger `AFTER INSERT` de la Fase 1 nunca los veía. La migración
+09 añade un trigger `AFTER UPDATE OF raw_app_meta_data` que sincroniza `tfm.profiles`. Desde ahora un admin puede
+asignar roles tanto desde el SQL Editor como desde *Authentication → Users → app_metadata*, y el cambio
+queda auditado. Lo cubre `supabase/tests/database/auth_sync.test.sql`.
+
+### Tests
+
+```powershell
+make test                     # unitarios: 225 tests en 5 paquetes (cobertura 94–99 %)
+make test-integration         # extremo a extremo contra el stack: 11 tests
+.\.venv\Scripts\python.exe scripts\apply_migrations.py --test   # pgTAP: 57 tests
+```
+
+Los tests de integración crean usuarios temporales reales en Supabase Auth (viewer y editor de
+`operaciones`, viewer de `creditos` y un admin), obtienen JWT reales con contraseña y verifican: autenticación,
+roles, **aislamiento por área a través de toda la cadena** (un usuario de créditos no recupera el procedimiento
+del HSM de operaciones), ingesta y búsqueda de un documento nuevo, feedback, guardrails, métricas y exportación.
+Al terminar borran usuarios, consultas, documentos y archivos de Storage.
 
 ---
 
@@ -355,7 +439,7 @@ Migraciones (`supabase/migrations/`):
 | Storage `documents/{area}/…` | descarga su área + `general` | + sube en su área | todo | bypass |
 
 - **Rol y área** viven en `tfm.profiles` y se toman de `app_metadata` del usuario, que solo puede
-  escribir `service_role`. Un usuario no puede autoasignarse privilegios: lo garantiza el trigger
+  escribir `service_role` (al crearlo y en cada actualización posterior, migración 09). Un usuario no puede autoasignarse privilegios: lo garantiza el trigger
   `tfm.protect_profile_privileges` (verificado en los tests).
 - `match_chunks` es `SECURITY INVOKER`: con el JWT de un usuario aplica RLS; el `rag-service`
   (service_role) filtra por área explícitamente con `filter_area`.

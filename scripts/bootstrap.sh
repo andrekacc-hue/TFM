@@ -30,7 +30,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 ENV_FILE=".env"
-COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.dev.yml)
+# Modo self-hosted: Supabase y Ollama en contenedores (perfiles del compose)
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile supabase-local --profile ollama-local)
 CONTAINER_SUPABASE_DIR="/workspace/supabase"
 
 SKIP_MODEL=false

@@ -22,6 +22,7 @@ from urllib.parse import quote
 import httpx
 
 from shared.exceptions import AuthenticationError, AuthorizationError, NotFoundError, UpstreamServiceError
+from shared.http import async_client
 from shared.logging import get_logger, get_trace_id
 
 logger = get_logger(__name__)
@@ -58,7 +59,7 @@ class SupabaseRepository:
         self.schema = schema
         self._service_key = service_key
         self._anon_key = anon_key
-        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+        self._client = async_client(timeout=timeout, transport=transport)
 
     # ------------------------------------------------------------------
     # Cabeceras
@@ -217,7 +218,7 @@ class SupabaseStorage:
         self._headers = {"apikey": service_key}
         if _is_jwt(service_key):
             self._headers["Authorization"] = f"Bearer {service_key}"
-        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+        self._client = async_client(timeout=timeout, transport=transport)
 
     @staticmethod
     def _object_path(bucket: str, path: str) -> str:

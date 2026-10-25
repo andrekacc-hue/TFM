@@ -1,0 +1,418 @@
+openapi: 3.1.0
+info:
+  title: ingest-service
+  description: 'Ingesta asíncrona de documentos: Supabase Storage → extracción (PDF/DOCX/Markdown) → chunking →
+    embeddings → pgvector, orquestada con Redis Streams.'
+  version: 0.3.0
+paths:
+  /v1/ingest:
+    post:
+      tags:
+      - ingesta
+      summary: Subir un documento y encolar su ingesta
+      description: 'Sube el archivo a Storage, registra el documento (``pending``) y publica el evento.
+
+
+        El procesamiento (extracción, chunking, embeddings) lo hace el worker de forma
+
+        asíncrona; el estado se sigue con Supabase Realtime o ``GET /v1/ingest/{id}``.'
+      operationId: upload_document_v1_ingest_post
+      parameters:
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-user-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Id
+      - name: x-user-area
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Area
+      - name: x-user-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Role
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_document_v1_ingest_post'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestAccepted'
+        '409':
+          description: Documento duplicado
+        '413':
+          description: Archivo demasiado grande
+        '415':
+          description: Formato no soportado
+        '503':
+          description: Cola no disponible
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ingest/{document_id}/reindex:
+    post:
+      tags:
+      - ingesta
+      summary: Reprocesar un documento (ingesta manual)
+      description: Vuelve a encolar un documento existente (p. ej. tras cambiar el chunking o un fallo).
+      operationId: reindex_document_v1_ingest__document_id__reindex_post
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - name: x-user-id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Id
+      - name: x-user-area
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Area
+      - name: x-user-role
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Role
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestAccepted'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ingest/queue/stats:
+    get:
+      tags:
+      - ingesta
+      summary: Estado de la cola de ingesta
+      description: Mensajes en el stream, pendientes de ACK y en la DLQ; contadores del worker.
+      operationId: queue_stats_v1_ingest_queue_stats_get
+      parameters:
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Queue Stats V1 Ingest Queue Stats Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ingest/{document_id}:
+    get:
+      tags:
+      - ingesta
+      summary: Estado de ingesta de un documento
+      operationId: document_status_v1_ingest__document_id__get
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentStatus'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - health
+      summary: Liveness
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /ready:
+    get:
+      tags:
+      - health
+      summary: Readiness
+      operationId: ready_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+components:
+  schemas:
+    Body_upload_document_v1_ingest_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+          description: PDF, DOCX, Markdown o TXT
+        source_type:
+          type: string
+          enum:
+          - manual
+          - procedimiento
+          - incidente
+          - faq
+          title: Source Type
+        area:
+          type: string
+          pattern: ^[a-z0-9_-]+$
+          title: Area
+        title:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Title
+      type: object
+      required:
+      - file
+      - source_type
+      - area
+      title: Body_upload_document_v1_ingest_post
+    DocumentStatus:
+      properties:
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        title:
+          type: string
+          title: Title
+        area:
+          type: string
+          title: Area
+        status:
+          type: string
+          enum:
+          - pending
+          - processing
+          - indexed
+          - failed
+          title: Status
+        chunk_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Chunk Count
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+        ingestion:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Ingestion
+      type: object
+      required:
+      - document_id
+      - title
+      - area
+      - status
+      - chunk_count
+      - error_message
+      - updated_at
+      title: DocumentStatus
+      description: Estado de ingesta de un documento.
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          - error
+          title: Status
+        service:
+          type: string
+          title: Service
+        version:
+          type: string
+          title: Version
+        checks:
+          additionalProperties:
+            type: string
+          type: object
+          title: Checks
+      type: object
+      required:
+      - status
+      - service
+      - version
+      title: HealthResponse
+      description: Estado de un servicio y de sus dependencias.
+    IngestAccepted:
+      properties:
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        status:
+          type: string
+          title: Status
+        storage_path:
+          type: string
+          title: Storage Path
+        message_id:
+          type: string
+          title: Message Id
+      type: object
+      required:
+      - document_id
+      - status
+      - storage_path
+      - message_id
+      title: IngestAccepted
+      description: Documento registrado y encolado.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

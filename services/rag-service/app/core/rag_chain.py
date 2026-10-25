@@ -207,6 +207,8 @@ class RagChain:
             "tokens_input": response.usage.tokens_input,
             "tokens_output": response.usage.tokens_output,
             "abstained": response.abstained,
+            "abstention_reason": response.abstention_reason,
+            "timings": response.timings.model_dump(),
             "llm_provider": response.llm_provider,
             "llm_model": response.llm_model,
             "trace_id": response.trace_id,

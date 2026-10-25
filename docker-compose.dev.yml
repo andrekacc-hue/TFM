@@ -33,6 +33,10 @@ services:
     ports:
       - "127.0.0.1:8002:8002"
 
+  analytics-service:
+    ports:
+      - "127.0.0.1:8003:8003"
+
   jaeger:
     ports:
       - "127.0.0.1:16686:16686"   # UI

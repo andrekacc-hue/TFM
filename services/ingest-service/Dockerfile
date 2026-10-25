@@ -7,6 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     HF_HOME=/models/hf
 
+# Usuario creado antes de descargar el modelo (evita duplicarlo con un chown posterior)
+RUN useradd --create-home --uid 10001 app && mkdir -p /models && chown app /models
+
 WORKDIR /srv
 
 RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -17,14 +20,13 @@ RUN pip install "/srv/shared[ml]"
 COPY ingest-service/requirements.txt /srv/ingest-service/requirements.txt
 RUN pip install -r /srv/ingest-service/requirements.txt
 
-COPY ingest-service/app /srv/ingest-service/app
-WORKDIR /srv/ingest-service
+USER app
 
 ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
 
-RUN useradd --create-home --uid 10001 app && chown -R app /srv /models
-USER app
+COPY --chown=app ingest-service/app /srv/ingest-service/app
+WORKDIR /srv/ingest-service
 
 EXPOSE 8002
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \

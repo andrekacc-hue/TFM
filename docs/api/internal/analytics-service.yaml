@@ -1,0 +1,463 @@
+openapi: 3.1.0
+info:
+  title: analytics-service
+  description: Métricas de uso, latencia, abstención y satisfacción del asistente; exportación de reportes.
+  version: 0.4.0
+paths:
+  /v1/metrics/summary:
+    get:
+      tags:
+      - métricas
+      summary: Resumen del periodo
+      description: 'Consultas, usuarios, abstención, bloqueos, latencia (p50/p90/p95/p99 y por etapa),
+
+        tokens, satisfacción y desglose por canal y modelo.'
+      operationId: summary_v1_metrics_summary_get
+      parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - web
+            - teams
+            - api
+            type: string
+          - type: 'null'
+          title: Channel
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+          title: From
+        description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+          title: To
+        description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Summary V1 Metrics Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/timeseries:
+    get:
+      tags:
+      - métricas
+      summary: Serie temporal
+      operationId: timeseries_v1_metrics_timeseries_get
+      parameters:
+      - name: bucket
+        in: query
+        required: false
+        schema:
+          enum:
+          - hour
+          - day
+          - week
+          - month
+          type: string
+          default: day
+          title: Bucket
+      - name: channel
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - web
+            - teams
+            - api
+            type: string
+          - type: 'null'
+          title: Channel
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+          title: From
+        description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+          title: To
+        description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Timeseries V1 Metrics Timeseries Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/top-documents:
+    get:
+      tags:
+      - métricas
+      summary: Documentos más citados
+      operationId: top_documents_v1_metrics_top_documents_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 10
+          title: Limit
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+          title: From
+        description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+          title: To
+        description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Top Documents V1 Metrics Top Documents Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/unanswered:
+    get:
+      tags:
+      - métricas
+      summary: Preguntas sin respuesta
+      description: 'Preguntas que terminaron en abstención: indican qué documentación falta.'
+      operationId: unanswered_v1_metrics_unanswered_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+          title: From
+        description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+          title: To
+        description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Unanswered V1 Metrics Unanswered Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/metrics/knowledge-base:
+    get:
+      tags:
+      - métricas
+      summary: Estado de la base de conocimientos
+      operationId: knowledge_base_v1_metrics_knowledge_base_get
+      parameters:
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Knowledge Base V1 Metrics Knowledge Base Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/reports/queries.{fmt}:
+    get:
+      tags:
+      - reportes
+      summary: Exportar el registro de consultas
+      description: Consultas del periodo con latencia por etapa, fuentes y feedback (CSV para Excel o JSON).
+      operationId: export_queries_v1_reports_queries__fmt__get
+      parameters:
+      - name: fmt
+        in: path
+        required: true
+        schema:
+          enum:
+          - csv
+          - json
+          type: string
+          title: Fmt
+      - name: channel
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - web
+            - teams
+            - api
+            type: string
+          - type: 'null'
+          title: Channel
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+          title: From
+        description: 'Inicio (ISO 8601). Por defecto: hace 7 días'
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+          title: To
+        description: 'Fin exclusivo (ISO 8601). Por defecto: ahora'
+      - name: x-internal-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Internal-Api-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/csv: {}
+            application/json: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - health
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /ready:
+    get:
+      tags:
+      - health
+      summary: Ready
+      operationId: ready_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          - error
+          title: Status
+        service:
+          type: string
+          title: Service
+        version:
+          type: string
+          title: Version
+        checks:
+          additionalProperties:
+            type: string
+          type: object
+          title: Checks
+      type: object
+      required:
+      - status
+      - service
+      - version
+      title: HealthResponse
+      description: Estado de un servicio y de sus dependencias.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

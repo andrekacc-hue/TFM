@@ -1,0 +1,10 @@
+# Dependencias de ejecución del api-gateway (la librería shared se instala aparte: pip install -e ../shared)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+structlog>=24.1
+httpx>=0.27
+PyJWT[crypto]>=2.8
+redis>=5.0
+limits>=4.0

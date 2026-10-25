@@ -28,6 +28,7 @@ services:
   # ------------------------------------------------------------------
   supabase-db:
     image: supabase/postgres:15.8.1.060
+    profiles: [supabase-local]
     restart: unless-stopped
     command:
       - postgres
@@ -39,11 +40,11 @@ services:
       POSTGRES_HOST: /var/run/postgresql
       PGPORT: 5432
       POSTGRES_PORT: 5432
-      PGPASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: postgres
       POSTGRES_DB: postgres
-      JWT_SECRET: ${SUPABASE_JWT_SECRET:?Ejecuta scripts/bootstrap para generar los secretos}
+      JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       JWT_EXP: ${JWT_EXPIRY:-3600}
     volumes:
       - supabase-db-data:/var/lib/postgresql/data
@@ -65,6 +66,7 @@ services:
   # ------------------------------------------------------------------
   supabase-auth:
     image: supabase/gotrue:v2.177.0
+    profiles: [supabase-local]
     restart: unless-stopped
     depends_on:
       supabase-db:
@@ -105,6 +107,7 @@ services:
   # ------------------------------------------------------------------
   supabase-rest:
     image: postgrest/postgrest:v12.2.12
+    profiles: [supabase-local]
     restart: unless-stopped
     depends_on:
       supabase-db:
@@ -127,6 +130,7 @@ services:
   # ------------------------------------------------------------------
   supabase-realtime:
     image: supabase/realtime:v2.34.47
+    profiles: [supabase-local]
     container_name: realtime-dev.supabase-realtime
     restart: unless-stopped
     depends_on:
@@ -142,7 +146,7 @@ services:
       DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
       DB_ENC_KEY: supabaserealtime
       API_JWT_SECRET: ${SUPABASE_JWT_SECRET}
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Ejecuta scripts/bootstrap para generar los secretos}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-}
       ERL_AFLAGS: -proto_dist inet_tcp
       DNS_NODES: "''"
       RLIMIT_NOFILE: "10000"
@@ -156,6 +160,7 @@ services:
   # ------------------------------------------------------------------
   supabase-storage:
     image: supabase/storage-api:v1.25.7
+    profiles: [supabase-local]
     restart: unless-stopped
     depends_on:
       supabase-db:
@@ -189,6 +194,7 @@ services:
   # ------------------------------------------------------------------
   supabase-meta:
     image: supabase/postgres-meta:v0.91.0
+    profiles: [supabase-local]
     restart: unless-stopped
     depends_on:
       supabase-db:
@@ -200,7 +206,7 @@ services:
       PG_META_DB_NAME: postgres
       PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      CRYPTO_KEY: ${PG_META_CRYPTO_KEY:?Ejecuta scripts/bootstrap para generar los secretos}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY:-}
     networks: [soporte-net]
 
   # ------------------------------------------------------------------
@@ -208,6 +214,7 @@ services:
   # ------------------------------------------------------------------
   supabase-kong:
     image: kong:2.8.1
+    profiles: [supabase-local]
     restart: unless-stopped
     depends_on:
       supabase-auth:
@@ -229,8 +236,8 @@ services:
       KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?Ejecuta scripts/bootstrap para generar los secretos}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?Ejecuta scripts/bootstrap para generar los secretos}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
     volumes:
       - ./supabase/docker/kong.yml:/home/kong/temp.yml:ro
     # Sustituye las variables $SUPABASE_* dentro de kong.yml antes de arrancar
@@ -242,6 +249,7 @@ services:
   # ------------------------------------------------------------------
   supabase-studio:
     image: supabase/studio:2025.06.30-sha-6f5982d
+    profiles: [supabase-local]
     restart: unless-stopped
     depends_on:
       supabase-meta:
@@ -293,6 +301,7 @@ services:
   # ------------------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
+    profiles: [ollama-local]
     restart: unless-stopped
     environment:
       OLLAMA_KEEP_ALIVE: 30m
@@ -307,7 +316,7 @@ services:
 
   # ------------------------------------------------------------------
   # rag-service — orquestación RAG (interno: solo lo llama el api-gateway)
-  # Con Ollama nativo en Windows/macOS usa OLLAMA_HOST_DOCKER=http://host.docker.internal:11434
+  # Por defecto usa el Ollama nativo del host; con --profile ollama-local: OLLAMA_HOST_DOCKER=http://ollama:11434
   # ------------------------------------------------------------------
   rag-service:
     build:
@@ -316,7 +325,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      OLLAMA_HOST: ${OLLAMA_HOST_DOCKER:-http://ollama:11434}
+      OLLAMA_HOST: ${OLLAMA_HOST_DOCKER:-http://host.docker.internal:11434}
       REDIS_URL: redis://redis:6379/0
       LOG_FORMAT: json
     depends_on:
@@ -342,6 +351,51 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    networks: [soporte-net]
+
+  # ------------------------------------------------------------------
+  # analytics-service — métricas y reportes (interno)
+  # ------------------------------------------------------------------
+  analytics-service:
+    build:
+      context: ./services
+      dockerfile: analytics-service/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      LOG_FORMAT: json
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [soporte-net]
+
+  # ------------------------------------------------------------------
+  # api-gateway — ÚNICO punto de entrada público (auth, roles, rate limit, trazas)
+  # ------------------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./services
+      dockerfile: api-gateway/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RAG_SERVICE_URL: http://rag-service:8001
+      INGEST_SERVICE_URL: http://ingest-service:8002
+      ANALYTICS_SERVICE_URL: http://analytics-service:8003
+      LOG_FORMAT: json
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rag-service:
+        condition: service_started
+      ingest-service:
+        condition: service_started
+      analytics-service:
+        condition: service_started
     networks: [soporte-net]
 
   # ------------------------------------------------------------------
