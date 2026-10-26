@@ -409,7 +409,7 @@ services:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
         VITE_API_GATEWAY_URL: ${VITE_API_GATEWAY_URL:-http://localhost:8000}
-        VITE_APP_NAME: ${VITE_APP_NAME:-Soporte TI Produbanco}
+        VITE_APP_NAME: ${VITE_APP_NAME:-Soporte TI Producción}
         VITE_AZURE_ENABLED: ${AZURE_ENABLED:-false}
     restart: unless-stopped
     ports:

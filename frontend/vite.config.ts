@@ -33,7 +33,7 @@ export default defineConfig({
       VITE_SUPABASE_URL: "https://test.supabase.co",
       VITE_SUPABASE_ANON_KEY: "sb_publishable_test",
       VITE_API_GATEWAY_URL: "http://gateway.test",
-      VITE_APP_NAME: "Soporte TI Produbanco",
+      VITE_APP_NAME: "Soporte TI Producción",
     },
     coverage: { provider: "v8", include: ["src/**/*.{ts,tsx}"], exclude: ["src/test/**", "src/main.tsx", "src/**/*.d.ts"] },
   },

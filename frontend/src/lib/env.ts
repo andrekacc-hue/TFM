@@ -12,6 +12,6 @@ export const env = {
   supabaseUrl: required("VITE_SUPABASE_URL"),
   supabaseAnonKey: required("VITE_SUPABASE_ANON_KEY"),
   gatewayUrl: required("VITE_API_GATEWAY_URL").replace(/\/$/, ""),
-  appName: import.meta.env.VITE_APP_NAME ?? "Soporte TI Produbanco",
+  appName: import.meta.env.VITE_APP_NAME ?? "Soporte TI Producción",
   azureEnabled: import.meta.env.VITE_AZURE_ENABLED === "true",
 } as const;
