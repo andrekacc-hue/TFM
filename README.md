@@ -49,8 +49,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 ### Evaluación con RAGAs
 
-- **Golden dataset** de 30 preguntas ([`tests/golden_dataset.json`](tests/golden_dataset.json)): 24 con respuesta
-  en los 6 documentos indexados y 6 fuera de alcance (2 trampa). Se sincroniza con `tfm.golden_dataset`.
+- **Golden dataset** de 36 preguntas ([`tests/golden_dataset.json`](tests/golden_dataset.json)): 24 con respuesta
+  en los 6 documentos indexados, 6 fuera de alcance (2 trampa) y 6 de tipo "síntoma + ¿qué acción tomo?". Se
+  sincroniza con `tfm.golden_dataset`.
 - **[`scripts/run_evaluation.py`](scripts/run_evaluation.py)**: consulta vía gateway, puntúa con RAGAs
   (faithfulness, answer relevancy, context precision, context recall) y mide lo que RAGAs no cubre: falsa
   abstención (separando el fallo del LLM del fallo de la recuperación), abstención correcta, hit rate y MRR, y
@@ -65,20 +66,22 @@ py -3.12 -m venv .venv-eval; .\.venv-eval\Scripts\pip install -r scripts\require
 .\.venv-eval\Scripts\python scripts\run_evaluation.py --repeat 3 --pdf
 ```
 
-**Línea base** (gemma4:31b-cloud, 30 preguntas × 3) — [informe PDF](docs/evaluation/baseline-gemma4.pdf):
+Resultados (gemma4:31b-cloud, juez el mismo modelo; 3 repeticiones por pregunta):
 
-| Faithfulness | Answer relevancy | Context precision | Context recall | Falsa abstención | Abst. correcta | Hit rate · MRR | p50 · p95 |
+| Ejecución | Faithfulness | Answer relevancy | Context precision | Context recall | Falsa abstención | Abst. correcta | p50 |
 |---|---|---|---|---|---|---|---|
-| 0,739 | 0,760 | 0,958 | 0,954 | 0 / 72 | 18 / 18 | 100 % · 1,00 | 2,4 s · 5,2 s |
+| [Línea base](docs/evaluation/baseline-gemma4.pdf) (30 preguntas) | 0,739 | 0,760 | 0,958 | 0,954 | 0 / 72 | 18 / 18 | 2,6 s |
+| [Chunking por secciones cortas](docs/evaluation/chunking-secciones.pdf) (36 preguntas) | **0,758** | **0,766** | **0,987** | **0,963** | 0 / 90 | 18 / 18 | **1,9 s** |
 
-La recuperación es casi perfecta. Faithfulness y relevancy bajan por la plantilla de cuatro secciones del prompt:
-la reformulación del problema y la sección de *incertidumbres* cuentan como afirmaciones no respaldadas por el
-contexto. No son alucinaciones; el análisis completo está en [`docs/evaluation.md`](docs/evaluation.md).
+Las métricas RAGAs de ambas filas se calculan sobre las mismas 24 preguntas con respuesta. Faithfulness y
+relevancy quedan bajo el objetivo por la plantilla de cuatro secciones del prompt: la reformulación del problema
+y la sección de *incertidumbres* cuentan como afirmaciones no respaldadas, aunque no son alucinaciones.
 
-La **falsa abstención** fue del 0 % en el golden dataset, pero depende de la formulación. En una sonda aparte, la
-pregunta "El monitor de colas muestra la alerta X, ¿qué acción debo tomar?" se abstuvo 3 de 4 veces, con el
-documento en la posición 1. Otras dos formas de preguntar lo mismo dieron 0 de 8. Es un sesgo de prudencia del
-LLM, no de la recuperación.
+**Hallazgo: la falsa abstención era un problema de chunking.** Con un documento corto, el asistente se abstenía
+8 de 8 veces. Al reproducir el caso con el contexto exacto que recibía el LLM se vio la causa: el chunker
+generaba un fragmento por sección, y la pregunta recuperaba el *Síntoma* pero no la *Acción*. El LLM se abstenía
+con razón. Ahora las secciones cortas consecutivas se agrupan en un fragmento: 0 de 8, sin tocar el prompt, y
+todas las métricas mejoran. Detalle en [`docs/evaluation.md`](docs/evaluation.md).
 
 ### Observabilidad
 

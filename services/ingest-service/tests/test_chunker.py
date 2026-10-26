@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.chunker import RecursiveChunker
+from app.core.chunker import Chunk, RecursiveChunker
 from app.core.embedder import BatchEmbedder, embedding_input
 from app.core.loaders.base import Section
 from tests.conftest import FakeEmbedder
@@ -66,6 +66,23 @@ def test_sections_keep_page_and_heading_metadata_and_global_index():
     assert chunks[-1].estimated_tokens == 4
 
 
+def test_short_consecutive_sections_share_a_chunk_with_their_headings():
+    chunks = RecursiveChunker(700, 120).split_sections([
+        Section("El monitor muestra la alerta EDGE-1.", heading="Síntoma"),
+        Section("Reiniciar el conector de notificaciones.", heading="Acción"),
+    ])
+    assert len(chunks) == 1
+    assert chunks[0].content == "Síntoma\nEl monitor muestra la alerta EDGE-1.\n\nAcción\nReiniciar el conector de notificaciones."
+    assert chunks[0].metadata["section"] == "Síntoma / Acción"
+
+
+def test_sections_are_not_grouped_across_pages_or_beyond_chunk_size():
+    chunker = RecursiveChunker(300, 50)
+    assert len(chunker.split_sections([Section("Texto corto.", page=1), Section("Otro texto.", page=2)])) == 2
+    long_a, long_b = Section("a " * 100, heading="A"), Section("b " * 100, heading="B")
+    assert [c.metadata["section"] for c in chunker.split_sections([long_a, long_b])] == ["A", "B"]
+
+
 def test_invalid_overlap():
     with pytest.raises(ValueError):
         RecursiveChunker(100, 100)
@@ -79,7 +96,7 @@ def test_contextual_embedding_input():
 
 async def test_batch_embedder_uses_batches_in_order():
     embedder = FakeEmbedder()
-    chunks = RecursiveChunker(300, 0).split_sections([Section(f"Texto {i}") for i in range(5)])
+    chunks = [Chunk(index=i, content=f"Texto {i}") for i in range(5)]
     vectors = await BatchEmbedder(embedder, batch_size=2).embed_chunks(chunks, "Doc")
     assert len(vectors) == 5
     assert [len(b) for b in embedder.batches] == [2, 2, 1]

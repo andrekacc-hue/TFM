@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Golden dataset para la evaluación con RAGAs: 24 preguntas con respuesta en el corpus indexado (4 por documento) y 6 fuera de alcance, en las que lo correcto es abstenerse. 'expected_document' es el título del documento que contiene la respuesta.",
+  "description": "Golden dataset para la evaluación con RAGAs: 24 preguntas con respuesta en el corpus indexado (4 por documento), 6 fuera de alcance (lo correcto es abstenerse) y 6 de tipo síntoma + ¿qué acción tomo? (GD-31…GD-36), añadidas tras el análisis de falsas abstenciones. 'expected_document' es el título del documento que contiene la respuesta.",
   "questions": [
     {
       "id": "GD-01",
@@ -271,6 +271,60 @@
       "expected_behavior": "abstain",
       "difficulty": "facil",
       "tags": ["fuera-de-alcance"]
+    },
+    {
+      "id": "GD-31",
+      "question": "El panel de monitoreo muestra la alerta BD-LOCK-01 sobre la tabla de movimientos, ¿qué acción debo tomar?",
+      "expected_answer": "Identificar la sesión bloqueante, el usuario de aplicación y el programa que la originó y documentarlos en el evento, sin terminar la sesión. Si el bloqueo supera 5 minutos o afecta transacciones en línea, escalar al DBA de turno por la línea de guardia.",
+      "expected_document": "MAN-BD-003 Gestión de bloqueos en la base de datos del core",
+      "expected_behavior": "answer",
+      "difficulty": "media",
+      "tags": ["sintoma-accion", "base-de-datos"]
+    },
+    {
+      "id": "GD-32",
+      "question": "El log del job de cierre muestra el código CIE-201, ¿qué acción debo tomar?",
+      "expected_answer": "CIE-201 indica un timeout de conexión con la base de datos: revisar la conectividad y, con aprobación del DBA, relanzar el job desde el último checkpoint confirmado.",
+      "expected_document": "PROC-OPS-014 Reinicio del batch de cierre diario",
+      "expected_behavior": "answer",
+      "difficulty": "media",
+      "tags": ["sintoma-accion", "batch"]
+    },
+    {
+      "id": "GD-33",
+      "question": "Los cajeros de varias agencias rechazan los retiros con el código 91, ¿qué acción debo tomar?",
+      "expected_answer": "Verificar el enlace principal en el panel de red y, si está caído, activar el enlace de respaldo desde la consola de comunicaciones con la lista CL-RED-03; si no se restablece en 15 minutos, escalar al proveedor del switch.",
+      "expected_document": "MAN-RED-007 Contingencia del enlace del switch transaccional ATM",
+      "expected_behavior": "answer",
+      "difficulty": "media",
+      "tags": ["sintoma-accion", "atm"]
+    },
+    {
+      "id": "GD-34",
+      "question": "El balanceador devuelve HTTP 502 a todos los usuarios de la banca web después del despliegue, ¿qué acción debo tomar?",
+      "expected_answer": "Confirmar en el monitoreo las conexiones activas del servicio de autenticación y, si el pool está agotado, pedir a Soporte Aplicativo el reinicio ordenado de los nodos uno por uno.",
+      "expected_document": "FAQ-BEL-002 Errores de acceso a Banca en Línea",
+      "expected_behavior": "answer",
+      "difficulty": "media",
+      "tags": ["sintoma-accion", "banca-en-linea"]
+    },
+    {
+      "id": "GD-35",
+      "question": "La VPN de guardia muestra VPN-TIMEOUT con ambos perfiles, ¿qué acción debo tomar?",
+      "expected_answer": "Reportar el incidente a la Mesa de Servicio indicando la hora y el perfil utilizado.",
+      "expected_document": "FAQ-VPN-001 Acceso remoto VPN para guardias de TI",
+      "expected_behavior": "answer",
+      "difficulty": "media",
+      "tags": ["sintoma-accion", "vpn"]
+    },
+    {
+      "id": "GD-36",
+      "question": "La transacción de prueba falla después de importar el nuevo certificado del HSM, ¿qué acción debo tomar?",
+      "expected_answer": "Restaurar el certificado anterior, que permanece en el HSM hasta su expiración, escalar a Seguridad de la Información y registrar la evidencia de ambos custodios en el ticket de cambio.",
+      "expected_document": "PROC-SEG-021 Renovación de certificados del HSM",
+      "expected_behavior": "answer",
+      "difficulty": "media",
+      "tags": ["sintoma-accion", "hsm"]
     }
   ]
 }

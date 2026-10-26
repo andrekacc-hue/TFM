@@ -85,9 +85,9 @@ def test_document_is_searchable_through_the_gateway(gateway, users, uploaded, re
     _wait_for_document(rest, uploaded["id"], {"indexed"})
     question = f"El monitor de colas muestra la alerta {uploaded['code']}, ¿qué acción debo tomar?"
     # Se comprueba lo que prueba este test (ingesta → búsqueda con RLS) con los fragmentos que
-    # recibió el LLM, no con su respuesta: con esta formulación el modelo se abstiene a veces
-    # aunque el documento esté en primera posición (3 de 4 en la medición de la Fase 8,
-    # docs/evaluation.md). Esa falsa abstención es del LLM y se mide en la evaluación.
+    # recibió el LLM, no con su respuesta, que depende del modelo. Este documento originó el
+    # hallazgo de la Fase 8: con un fragmento por sección, "Acción" no llegaba al contexto y el
+    # LLM se abstenía (8/8); el chunker ahora agrupa secciones cortas (docs/evaluation.md).
     body = gateway.post("/api/v1/query", json={"question": question, "include_contexts": True},
                         headers=users["viewer_ops"].headers("edge-query")).json()
     titles = [c["title"] for c in body["contexts"] or []]

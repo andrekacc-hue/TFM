@@ -14,8 +14,10 @@ Métricas RAGAs (juez = LLM vía API compatible con OpenAI; por defecto el Ollam
     también las que el modelo se abstuvo (miden la recuperación, no la generación).
 
 Abstención (lo que RAGAs no mide):
-  - falsa abstención LLM: se abstuvo aunque el documento esperado estaba en el contexto.
-  - falsa abstención por recuperación: el documento esperado no llegó al contexto.
+  - falsa abstención LLM: se abstuvo aunque el contexto contenía la respuesta (documento
+    esperado presente y, con RAGAs, context_recall >= 0,5).
+  - falsa abstención por recuperación: el documento esperado no llegó al contexto, o llegó
+    sin el fragmento con la respuesta (context_recall < 0,5).
   - abstención correcta / respuesta indebida en preguntas fuera de alcance.
   Con --repeat N cada pregunta se hace N veces para estimar la tasa (el LLM no es determinista).
 
@@ -293,6 +295,22 @@ async def score_ragas(results: list[QuestionResult], args: argparse.Namespace) -
             print(f"    RAGAs {done}/{len(tasks)}")
 
 
+def refine_abstentions(results: list[QuestionResult], min_recall: float = 0.5) -> int:
+    """Que el documento esperado esté en el contexto no basta: puede haber llegado solo el
+    fragmento del síntoma y no el de la acción. Si context_recall indica que el contexto no
+    cubría la respuesta, la abstención fue correcta para el LLM y el fallo es de recuperación."""
+    moved = 0
+    for result in results:
+        recall = result.scores.get("context_recall")
+        if recall is None or recall >= min_recall:
+            continue
+        for attempt in result.attempts:
+            if attempt.outcome == FALSE_ABSTENTION_LLM:
+                attempt.outcome = FALSE_ABSTENTION_RETRIEVAL
+                moved += 1
+    return moved
+
+
 # ---------------------------------------------------------------------------
 # Agregados
 # ---------------------------------------------------------------------------
@@ -406,6 +424,8 @@ async def main() -> int:
     if not args.no_ragas:
         print(f"\n  RAGAs con juez {args.judge_model} ({args.judge_base_url})")
         await score_ragas(results, args)
+        if moved := refine_abstentions(results):
+            print(f"    {moved} abstención(es) reclasificadas como fallo de recuperación (context_recall bajo)")
 
     metrics = aggregate(results)
     duration = round(time.perf_counter() - started, 1)

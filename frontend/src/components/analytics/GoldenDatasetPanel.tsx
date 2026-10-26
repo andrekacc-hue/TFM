@@ -13,7 +13,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form-controls";
 import { useAddGoldenQuestion, useDeleteGoldenQuestion, useGoldenDataset } from "@/hooks/useAdmin";
 import { useAuth } from "@/hooks/useAuth";
 
-const TARGET = 30;
+const TARGET = 36;
 const DIFFICULTY_LABEL = { facil: "Fácil", media: "Media", dificil: "Difícil" } as const;
 
 const schema = z.object({

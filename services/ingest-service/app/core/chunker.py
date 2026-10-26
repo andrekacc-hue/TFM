@@ -60,15 +60,44 @@ class RecursiveChunker:
     def split_sections(self, sections: Iterable[Section]) -> list[Chunk]:
         """Trocea todas las secciones y numera los chunks de forma global."""
         chunks: list[Chunk] = []
-        for section in sections:
-            for text in self.split_text(section.text):
+        for group in self._group_short_sections(sections):
+            if len(group) == 1:
+                texts, heading = self.split_text(group[0].text), group[0].heading
+            else:
+                texts = ["\n\n".join(f"{s.heading}\n{s.text.strip()}" if s.heading else s.text.strip() for s in group)]
+                heading = " / ".join(dict.fromkeys(s.heading for s in group if s.heading)) or None
+            for text in texts:
                 metadata: dict[str, Any] = {"char_count": len(text)}
-                if section.page is not None:
-                    metadata["page"] = section.page
-                if section.heading:
-                    metadata["section"] = section.heading
+                if group[0].page is not None:
+                    metadata["page"] = group[0].page
+                if heading:
+                    metadata["section"] = heading
                 chunks.append(Chunk(index=len(chunks), content=text, metadata=metadata))
         return chunks
+
+    def _group_short_sections(self, sections: Iterable[Section]) -> list[list[Section]]:
+        """Agrupa secciones cortas consecutivas de la misma página mientras quepan en un chunk.
+
+        Sin esto, un procedimiento con "Síntoma" y "Acción" de dos líneas cada uno queda en
+        dos chunks: la pregunta por el síntoma recupera el primero y la acción no llega al
+        LLM, que se abstiene con razón (medido en la Fase 8, docs/evaluation.md).
+        """
+        groups: list[list[Section]] = []
+        size = 0
+        for section in sections:
+            text = section.text.strip()
+            if not text:
+                continue
+            rendered = len(text) + len(section.heading or "") + 3  # encabezado + separadores
+            last = groups[-1] if groups else None
+            if (last and len(text) <= self.chunk_size and last[-1].page == section.page
+                    and len(last[-1].text.strip()) <= self.chunk_size and size + rendered <= self.chunk_size):
+                last.append(section)
+                size += rendered
+            else:
+                groups.append([section])
+                size = rendered
+        return groups
 
     def split_text(self, text: str) -> list[str]:
         """Trocea un texto en chunks de como máximo ``chunk_size`` caracteres."""

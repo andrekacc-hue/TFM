@@ -65,8 +65,9 @@ exponen el gateway, el portal y el bot.
    `SKIP LOCKED`) y publica en el Redis Stream. Las Edge Functions corren en la nube de Supabase y no alcanzan
    Redis.
 4. El worker descarga el archivo, lo convierte (PDF, DOCX, Markdown, HTML), lo trocea (700 caracteres con
-   solape de 120 y encabezado de sección), calcula los embeddings y escribe `tfm.chunks`. Tras 3 fallos, el
-   documento va a la DLQ.
+   solape de 120 y encabezado de sección), calcula los embeddings y escribe `tfm.chunks`. Las secciones cortas
+   consecutivas de una misma página se agrupan en un solo fragmento, con sus encabezados, para que un
+   síntoma no quede separado de su acción. Tras 3 fallos, el documento va a la DLQ.
 5. El portal recibe el cambio de estado por **Realtime**.
 
 ## 4. Modelo de datos (schema `tfm`)
@@ -109,6 +110,7 @@ Migraciones en [`supabase/migrations/`](../supabase/migrations/) (01–11). Test
 | Reranker multilingüe `mmarco-mMiniLMv2` | `ms-marco-MiniLM` (spec) | Corpus en español: mejor orden en la comparación realizada |
 | Abstención en dos capas (umbral + LLM) | Solo el prompt | Lo fuera de alcance no gasta LLM (≈0,15 s); los temas vecinos los rechaza el modelo |
 | Adapters de LLM intercambiables | Un proveedor fijo | Ollama local/Cloud, Claude u OpenAI con `LLM_PROVIDER` |
+| Agrupar secciones cortas en un fragmento | Un fragmento por sección | Con una sección por fragmento, el síntoma se recuperaba sin su acción y el LLM se abstenía (8/8 → 0/8 tras el cambio) |
 | Outbox en Postgres para la ingesta | Edge Function → Redis directo | Las Edge Functions no alcanzan Redis; además, reencola lo atascado |
 | Métricas agregadas en SQL | Agregar en Python | Percentiles y tasas sin transferir filas |
 | Microsoft 365 Agents SDK | Bot Framework SDK (spec) | El SDK de Python se archivó en enero de 2026 |
@@ -135,5 +137,5 @@ Migraciones en [`supabase/migrations/`](../supabase/migrations/) (01–11). Test
 | Base de datos (RLS, funciones, triggers) | pgTAP | 64 |
 | Integración extremo a extremo (stack real) | pytest | 16 |
 | E2E del portal | Playwright | 3 |
-| Calidad de respuestas | RAGAs + golden dataset | 30 preguntas |
+| Calidad de respuestas | RAGAs + golden dataset | 36 preguntas |
 | Carga | Locust | [`scripts/load_test.py`](../scripts/load_test.py) |

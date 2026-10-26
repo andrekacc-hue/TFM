@@ -23,7 +23,7 @@ async def test_markdown_document_is_indexed(pipeline, repo, storage):
 
     first = repo.chunks[0]
     assert first["chunk_index"] == 0
-    assert first["metadata"]["section"] == "Paso 1 — Diagnóstico"
+    assert first["metadata"]["section"].startswith("Paso 1 — Diagnóstico")  # secciones cortas agrupadas
     assert len(first["embedding"]) == 4
     assert first["token_count"] > 0
 
